@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escaneo — Sistema de Trazabilidad</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+  :root{
+    --bg:#EFEDE6; --panel:#FFFFFF; --ink:#1C2027; --ink-soft:#75797F; --line:#E3E0D6;
+    --steel:#233240; --rust:#B5502E; --teal:#1B7F63; --teal-bg:#E7F4EE; --amber:#DE9A34;
+    --font:'Segoe UI', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); padding-bottom:40px;}
+  .header{background:var(--steel); color:#fff; padding:16px; text-align:center;}
+  .header h1{font-size:16px; margin:0; font-weight:800;}
+  .header .sub{font-size:11.5px; opacity:.8; margin-top:2px;}
+
+  .tabbar{display:flex; background:#1A232C; position:sticky; top:0; z-index:10; overflow-x:auto;}
+  .tabbtn{flex:1; padding:12px 4px; text-align:center; color:#9AA3AC; font-size:11px; font-weight:800; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;}
+  .tabbtn.active{color:#fff; border-bottom-color:var(--rust);}
+
+  .wrap{max-width:480px; margin:0 auto; padding:16px;}
+  .tabpanel{display:none;}
+  .tabpanel.show{display:block;}
+
+  .estacion-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px;}
+  .estacion-btn{
+    padding:14px 8px; border:1.5px solid var(--line); border-radius:10px; background:#fff;
+    font-size:12.5px; font-weight:700; color:var(--ink-soft); cursor:pointer; text-align:center;
+  }
+  .estacion-btn.active{background:var(--rust); border-color:var(--rust); color:#fff;}
+
+  #scanBox{display:none;}
+  #scanBox.show{display:block;}
+  #video{width:100%; border-radius:12px; background:#000; max-height:280px; object-fit:cover;}
+  #canvas{display:none;}
+
+  .manual-entry{margin-top:10px; display:flex; gap:6px;}
+  .manual-entry input{
+    flex:1; padding:11px; border:1.5px solid var(--line); border-radius:8px; font-size:14px;
+  }
+  .manual-entry button{
+    padding:11px 16px; background:var(--steel); color:#fff; border:none; border-radius:8px;
+    font-weight:700; font-size:13px;
+  }
+
+  .piece-card{
+    display:none; background:var(--panel); border:2px solid var(--ink); border-radius:14px;
+    padding:18px; margin-top:16px;
+  }
+  .piece-card.show{display:block;}
+  .piece-name{font-size:19px; font-weight:800; margin-bottom:2px;}
+  .piece-meta{font-size:12.5px; color:var(--ink-soft); margin-bottom:12px;}
+  .piece-field{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .piece-field b{color:var(--ink-soft); font-weight:600;}
+
+  .confirm-btn{
+    width:100%; padding:15px; background:var(--teal); color:#fff; border:none; border-radius:10px;
+    font-size:15px; font-weight:800; margin-top:16px; cursor:pointer;
+  }
+  .confirm-btn:disabled{background:#B7BCC1;}
+
+  .msg{margin-top:14px; padding:12px 14px; border-radius:9px; font-size:13px; font-weight:700; display:none;}
+  .msg.show{display:block;}
+  .msg.ok{background:var(--teal-bg); color:var(--teal);}
+  .msg.warn{background:#FDF1E0; color:#8A5A0F;}
+  .msg.error{background:#FBE7E2; color:var(--rust);}
+
+  .loading{text-align:center; padding:20px; color:var(--ink-soft); font-size:13px;}
+
+  .panol-item{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:12px; margin-bottom:8px;}
+  .panol-item .nombre{font-weight:700; font-size:13.5px; margin-bottom:6px;}
+  .panol-row{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft);}
+  .panol-row input{width:70px; padding:7px; border:1.5px solid var(--line); border-radius:6px; font-size:13px;}
+  .panol-row button{padding:8px 12px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;}
+
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px; border:1.5px solid var(--line); border-radius:8px; font-size:14px; font-family:var(--font); background:#fff;
+  }
+  .field textarea{resize:vertical; min-height:60px;}
+
+  .vg-stats{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+  .vg-stat{flex:1; min-width:70px; background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 6px; text-align:center;}
+  .vg-stat .n{font-size:17px; font-weight:800; color:var(--rust);}
+  .vg-stat .l{font-size:9px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; margin-top:2px;}
+
+  .vg-ambiente{margin-bottom:14px;}
+  .vg-ambiente-title{background:var(--steel); color:#fff; font-size:12.5px; font-weight:800; padding:8px 12px; border-radius:9px 9px 0 0;}
+  .vg-modulo{background:#fff; border:1.5px solid var(--line); border-top:none;}
+  .vg-modulo-title{font-size:11.5px; font-weight:700; color:var(--ink-soft); padding:7px 12px; background:#FAF9F5; border-bottom:1px solid var(--line);}
+  .vg-pieza{display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .vg-pieza:last-child{border-bottom:none;}
+  .vg-dots{display:flex; gap:3px;}
+  .vg-dot{width:9px; height:9px; border-radius:50%; background:var(--line);}
+  .vg-dot.done{background:var(--teal);}
+
+  .cam-note{font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Sistema de Trazabilidad</h1>
+  <div class="sub">Industria Interior</div>
+</div>
+
+<div class="tabbar">
+  <div class="tabbtn active" id="tabbtnEscaneo" onclick="mostrarTab('Escaneo')">ESCANEO</div>
+  <div class="tabbtn" id="tabbtnPanol" onclick="mostrarTab('Panol')">PAÑOL</div>
+  <div class="tabbtn" id="tabbtnRetrabajo" onclick="mostrarTab('Retrabajo')">RETRABAJO</div>
+  <div class="tabbtn" id="tabbtnVistaGeneral" onclick="mostrarTab('VistaGeneral')">VISTA GRAL.</div>
+</div>
+
+<div class="wrap">
+
+  <div class="tabpanel show" id="tabEscaneo">
+    <div class="estacion-grid" id="estacionGrid"></div>
+    <div id="scanBox">
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div class="cam-note" id="camNote"></div>
+      <div class="manual-entry">
+        <input type="text" id="manualInput" placeholder="O escribí / escaneá la Clave Única" onkeydown="if(event.key==='Enter') buscarManual()" autofocus>
+        <button onclick="buscarManual()">Buscar</button>
+      </div>
+    </div>
+    <div class="piece-card" id="pieceCard"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="tabpanel" id="tabPanol">
+    <div class="field">
+      <label>Obra</label>
+      <input type="text" id="panolObra" placeholder="Ej: T 02549" value="T 02549">
+    </div>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarPanol()">Cargar lista de Pañol</button>
+    <div id="panolLista" style="margin-top:16px;"></div>
+    <div class="msg" id="msgPanol"></div>
+  </div>
+
+  <div class="tabpanel" id="tabRetrabajo">
+    <div class="manual-entry" style="margin-top:0;">
+      <input type="text" id="retrabajoInput" placeholder="Clave Única de la pieza" onkeydown="if(event.key==='Enter') buscarPiezaRetrabajo()">
+      <button onclick="buscarPiezaRetrabajo()">Buscar</button>
+    </div>
+    <div class="piece-card" id="pieceCardRetrabajo"></div>
+
+    <div id="formRetrabajo" style="display:none; margin-top:16px;">
+      <div class="field">
+        <label>Motivo</label>
+        <select id="retMotivo">
+          <option>Error Técnico (Medición/Diseño)</option>
+          <option>Error Productivo (Mecanizado)</option>
+          <option>Error Comercial (Venta)</option>
+          <option>Adicional obra</option>
+          <option>Faltante en Obra</option>
+          <option>Mal Canteado / Despegado</option>
+          <option>Mal Cortado</option>
+          <option>Rayado / Golpeado</option>
+          <option>Otro motivo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Solicitado por (tu nombre)</label>
+        <input type="text" id="retSolicitante" placeholder="Ej: Cristian">
+      </div>
+      <div class="field">
+        <label>Rol</label>
+        <select id="retRol">
+          <option>Técnico</option>
+          <option>Encargado de Maquina</option>
+          <option>Armador</option>
+          <option>Encargado General</option>
+          <option>Instalador</option>
+          <option>Comercial</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Observaciones</label>
+        <textarea id="retObs" placeholder="Detalle del problema..."></textarea>
+      </div>
+      <button class="confirm-btn" onclick="enviarRetrabajo()">Generar pedido</button>
+    </div>
+    <div class="msg" id="msgRetrabajo"></div>
+  </div>
+
+  <div class="tabpanel" id="tabVistaGeneral">
+    <div class="field">
+      <label>Obra</label>
+      <input type="text" id="vgObra" placeholder="Ej: T 02549" value="T 02549">
+    </div>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarVistaGeneral()">Actualizar Vista General</button>
+    <div id="vgContent" style="margin-top:16px;"></div>
+    <div class="msg" id="msgVG"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACION -- pegar acá la URL de tu Apps Script (/exec)
+// ============================================================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3S8eZwB3WNZOi0fDrS4bPIaU3fgRcal2tGjdnHMSvKh9rSVz2DQhy-EoNZmolZinX/exec";
+
+const PROCESOS = ["Corte", "Pegado", "Mecanizado", "Armado", "Logistica", "Instalacion"];
+let estacionActual = null;
+let piezaActual = null;
+let piezaActualRetrabajo = null;
+let stream = null;
+let scanning = false;
+
+async function llamarAPI(action, params) {
+  params = params || {};
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('action', action);
+  Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
+  const resp = await fetch(url.toString());
+  return await resp.json();
+}
+
+function mostrarTab(nombre) {
+  ["Escaneo", "Panol", "Retrabajo", "VistaGeneral"].forEach(t => {
+    document.getElementById('tab' + t).classList.toggle('show', t === nombre);
+    document.getElementById('tabbtn' + t).classList.toggle('active', t === nombre);
+  });
+  if (nombre !== 'Escaneo') { scanning = false; if (stream) stream.getTracks().forEach(tr => tr.stop()); }
+}
+
+const grid = document.getElementById('estacionGrid');
+PROCESOS.forEach(p => {
+  const btn = document.createElement('div');
+  btn.className = 'estacion-btn';
+  btn.textContent = p;
+  btn.onclick = () => seleccionarEstacion(p, btn);
+  grid.appendChild(btn);
+});
+
+function seleccionarEstacion(proceso, btnEl) {
+  estacionActual = proceso;
+  document.querySelectorAll('.estacion-btn').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  document.getElementById('scanBox').classList.add('show');
+  ocultarMsg('msg');
+  document.getElementById('pieceCard').classList.remove('show');
+  iniciarCamara();
+}
+
+function iniciarCamara() {
+  if (scanning) return;
+  const video = document.getElementById('video');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    .then(s => {
+      stream = s;
+      video.srcObject = stream;
+      video.setAttribute("playsinline", true);
+      video.play();
+      scanning = true;
+      document.getElementById('camNote').textContent = '';
+      requestAnimationFrame(tickScan);
+    })
+    .catch(err => {
+      document.getElementById('camNote').textContent = 'Cámara no disponible (' + err.message + ') — usá el campo de texto.';
+    });
+}
+
+function tickScan() {
+  if (!scanning) return;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code && code.data) {
+      procesarClave(code.data);
+      return;
+    }
+  }
+  requestAnimationFrame(tickScan);
+}
+
+function buscarManual() {
+  const val = document.getElementById('manualInput').value.trim();
+  if (val) procesarClave(val);
+}
+
+async function procesarClave(claveUnica) {
+  ocultarMsg('msg');
+  document.getElementById('pieceCard').innerHTML = '<div class="loading">Buscando pieza...</div>';
+  document.getElementById('pieceCard').classList.add('show');
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: claveUnica });
+    mostrarPieza(res);
+  } catch (err) {
+    mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error');
+  }
+}
+
+function mostrarPieza(res) {
+  if (res.error) {
+    mostrarMsg('msg', res.error, 'error');
+    document.getElementById('pieceCard').classList.remove('show');
+    return;
+  }
+  piezaActual = res;
+  const est = res.estados[estacionActual];
+  const yaCompletado = est.estado === 'Completado';
+
+  document.getElementById('pieceCard').innerHTML = `
+    <div class="piece-name">${res.pieza}</div>
+    <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
+    <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
+    <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
+    <div class="piece-field"><b>Medida</b><span>${res.medida}</span></div>
+    <div class="piece-field"><b>Estado en ${estacionActual}</b><span>${yaCompletado ? 'Ya completado' : 'Pendiente'}</span></div>
+    <button class="confirm-btn" onclick="confirmar()">✓ Confirmar ${estacionActual}</button>
+  `;
+}
+
+async function confirmar() {
+  if (!piezaActual || !estacionActual) return;
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
+    setTimeout(() => {
+      document.getElementById('pieceCard').classList.remove('show');
+      scanning = true;
+      requestAnimationFrame(tickScan);
+    }, 1400);
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPanol() {
+  const obra = document.getElementById('panolObra').value.trim();
+  if (!obra) { mostrarMsg('msgPanol', 'Completá la obra', 'warn'); return; }
+  ocultarMsg('msgPanol');
+  document.getElementById('panolLista').innerHTML = '<div class="loading">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPanolItems', { obra });
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); document.getElementById('panolLista').innerHTML=''; return; }
+    if (!res.items.length) { document.getElementById('panolLista').innerHTML = '<div class="loading">No hay ítems de Pañol cargados para esta obra.</div>'; return; }
+    document.getElementById('panolLista').innerHTML = res.items.map(it => `
+      <div class="panol-item">
+        <div class="nombre">${it.descripcion}</div>
+        <div class="panol-row">
+          <span>Requerido: <b>${it.requerido} ${it.unidad || ''}</b></span>
+          <input type="text" id="panolEnt_${it.fila}" value="${it.entregado || ''}" placeholder="Entregado">
+          <button onclick="confirmarPanol(${it.fila})">Guardar</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function confirmarPanol(fila) {
+  const val = document.getElementById('panolEnt_' + fila).value;
+  try {
+    await llamarAPI('confirmarPanolItem', { fila: fila, cantidad: val });
+    mostrarMsg('msgPanol', 'Guardado correctamente', 'ok');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function buscarPiezaRetrabajo() {
+  const val = document.getElementById('retrabajoInput').value.trim();
+  if (!val) return;
+  ocultarMsg('msgRetrabajo');
+  document.getElementById('pieceCardRetrabajo').innerHTML = '<div class="loading">Buscando pieza...</div>';
+  document.getElementById('pieceCardRetrabajo').classList.add('show');
+  document.getElementById('formRetrabajo').style.display = 'none';
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: val });
+    if (res.error) {
+      mostrarMsg('msgRetrabajo', res.error, 'error');
+      document.getElementById('pieceCardRetrabajo').classList.remove('show');
+      return;
+    }
+    piezaActualRetrabajo = res;
+    document.getElementById('pieceCardRetrabajo').innerHTML = `
+      <div class="piece-name">${res.pieza}</div>
+      <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
+      <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
+      <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
+    `;
+    document.getElementById('formRetrabajo').style.display = 'block';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function enviarRetrabajo() {
+  if (!piezaActualRetrabajo) return;
+  const solicitante = document.getElementById('retSolicitante').value.trim();
+  if (!solicitante) { mostrarMsg('msgRetrabajo', 'Completá quién lo solicita', 'warn'); return; }
+
+  const datos = {
+    claveUnica: piezaActualRetrabajo.claveUnica,
+    obra: piezaActualRetrabajo.obra,
+    ambiente: piezaActualRetrabajo.ambiente,
+    motivo: document.getElementById('retMotivo').value,
+    solicitadoPor: solicitante,
+    rol: document.getElementById('retRol').value,
+    observaciones: document.getElementById('retObs').value,
+  };
+
+  try {
+    const res = await llamarAPI('generarRetrabajo', { datos: JSON.stringify(datos) });
+    if (res.error) { mostrarMsg('msgRetrabajo', res.error, 'error'); return; }
+    const extra = res.requiereAprobacion ? ' — queda pendiente de aprobación del Encargado General.' : '';
+    mostrarMsg('msgRetrabajo', 'Pedido ' + res.idPedido + ' generado.' + extra, 'ok');
+    document.getElementById('formRetrabajo').style.display = 'none';
+    document.getElementById('pieceCardRetrabajo').classList.remove('show');
+    document.getElementById('retrabajoInput').value = '';
+    document.getElementById('retObs').value = '';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarVistaGeneral() {
+  const obra = document.getElementById('vgObra').value.trim();
+  if (!obra) { mostrarMsg('msgVG', 'Completá la obra', 'warn'); return; }
+  ocultarMsg('msgVG');
+  document.getElementById('vgContent').innerHTML = '<div class="loading">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getVistaGeneral', { obra });
+    if (res.error) { mostrarMsg('msgVG', res.error, 'error'); document.getElementById('vgContent').innerHTML=''; return; }
+    renderVistaGeneral(res);
+  } catch (err) {
+    mostrarMsg('msgVG', 'Error: ' + err.message, 'error');
+  }
+}
+
+function renderVistaGeneral(res) {
+  let html = '<div class="vg-stats">';
+  html += `<div class="vg-stat"><div class="n">${res.totalPiezas}</div><div class="l">Total</div></div>`;
+  PROCESOS.forEach(p => {
+    html += `<div class="vg-stat"><div class="n">${res.totalesProceso[p]}</div><div class="l">${p}</div></div>`;
+  });
+  html += '</div>';
+
+  Object.keys(res.ambientes).sort().forEach(ambiente => {
+    html += `<div class="vg-ambiente"><div class="vg-ambiente-title">${ambiente}</div>`;
+    const modulos = res.ambientes[ambiente];
+    Object.keys(modulos).sort().forEach(modulo => {
+      html += `<div class="vg-modulo"><div class="vg-modulo-title">${modulo}</div>`;
+      modulos[modulo].forEach(pieza => {
+        html += `<div class="vg-pieza"><span>${pieza.descripcion}</span><div class="vg-dots">`;
+        PROCESOS.forEach(p => {
+          const done = pieza.estados[p] === 'Completado';
+          html += `<div class="vg-dot ${done ? 'done' : ''}" title="${p}: ${pieza.estados[p]}"></div>`;
+        });
+        html += `</div></div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  });
+
+  document.getElementById('vgContent').innerHTML = html || '<div class="loading">No hay piezas para esta obra.</div>';
+}
+
+function mostrarMsg(id, texto, tipo) {
+  const el = document.getElementById(id);
+  el.textContent = texto;
+  el.className = 'msg show ' + tipo;
+}
+function ocultarMsg(id) {
+  document.getElementById(id).className = 'msg';
+}
+</script>
+</body>
+</html>
