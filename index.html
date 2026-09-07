@@ -291,12 +291,28 @@ function buscarManual() {
   if (val) procesarClave(val);
 }
 
-async function procesarClave(claveUnica) {
+async function procesarClave(codigo) {
   ocultarMsg('msg');
+
+  if (codigo.indexOf('PLANO:') === 0) {
+    document.getElementById('pieceCard').innerHTML = '<div class="loading">Registrando plano de corte...</div>';
+    document.getElementById('pieceCard').classList.add('show');
+    try {
+      const res = await llamarAPI('registrarPlacaEscaneada', { codigo });
+      document.getElementById('pieceCard').classList.remove('show');
+      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+      mostrarMsg('msg', res.mensaje, 'ok');
+      setTimeout(() => { scanning = true; requestAnimationFrame(tickScan); }, 1400);
+    } catch (err) {
+      mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    }
+    return;
+  }
+
   document.getElementById('pieceCard').innerHTML = '<div class="loading">Buscando pieza...</div>';
   document.getElementById('pieceCard').classList.add('show');
   try {
-    const res = await llamarAPI('buscarPieza', { clave: claveUnica });
+    const res = await llamarAPI('buscarPieza', { clave: codigo });
     mostrarPieza(res);
   } catch (err) {
     mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error');
@@ -484,3 +500,4 @@ function ocultarMsg(id) {
 </script>
 </body>
 </html>
+
