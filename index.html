@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Escaneo — Sistema de Trazabilidad</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <style>
   :root{
     --bg:#EFEDE6; --panel:#FFFFFF; --ink:#1C2027; --ink-soft:#75797F; --line:#E3E0D6;
@@ -211,8 +211,8 @@ const PROCESOS = ["Corte", "Pegado", "Mecanizado", "Armado", "Logistica", "Insta
 let estacionActual = null;
 let piezaActual = null;
 let piezaActualRetrabajo = null;
-let stream = null;
 let scanning = false;
+let zxingReader = null;
 
 async function llamarAPI(action, params) {
   params = params || {};
@@ -228,7 +228,7 @@ function mostrarTab(nombre) {
     document.getElementById('tab' + t).classList.toggle('show', t === nombre);
     document.getElementById('tabbtn' + t).classList.toggle('active', t === nombre);
   });
-  if (nombre !== 'Escaneo') { scanning = false; if (stream) stream.getTracks().forEach(tr => tr.stop()); }
+  if (nombre !== 'Escaneo') { detenerCamara(); }
 }
 
 const grid = document.getElementById('estacionGrid');
@@ -250,42 +250,34 @@ function seleccionarEstacion(proceso, btnEl) {
   document.getElementById('pieceCard').classList.remove('show');
 }
 
+function detenerCamara() {
+  scanning = false;
+  if (zxingReader) { zxingReader.reset(); }
+}
+
 function iniciarCamara() {
   if (scanning) return;
   const video = document.getElementById('video');
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } })
-    .then(s => {
-      stream = s;
-      video.srcObject = stream;
-      video.setAttribute("playsinline", true);
-      video.play();
-      scanning = true;
-      document.getElementById('camNote').textContent = '';
-      document.getElementById('btnIniciarCamara').style.display = 'none';
-      requestAnimationFrame(tickScan);
-    })
-    .catch(err => {
-      document.getElementById('camNote').textContent = 'Cámara no disponible (' + err.message + ') — usá el campo de texto.';
-    });
-}
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
+  zxingReader = new ZXing.BrowserQRCodeReader(hints);
 
-function tickScan() {
-  if (!scanning) return;
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.height = video.videoHeight;
-    canvas.width = video.videoWidth;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code && code.data) {
-      procesarClave(code.data);
-      return;
+  zxingReader.decodeFromConstraints(
+    { video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } },
+    video,
+    (result, err) => {
+      if (result && result.getText()) {
+        detenerCamara();
+        procesarClave(result.getText());
+      }
     }
-  }
-  requestAnimationFrame(tickScan);
+  ).then(() => {
+    scanning = true;
+    document.getElementById('camNote').textContent = '';
+    document.getElementById('btnIniciarCamara').style.display = 'none';
+  }).catch(err => {
+    document.getElementById('camNote').textContent = 'Cámara no disponible (' + err.message + ') — usá el campo de texto.';
+  });
 }
 
 function buscarManual() {
@@ -304,7 +296,7 @@ async function procesarClave(codigo) {
       document.getElementById('pieceCard').classList.remove('show');
       if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
       mostrarMsg('msg', res.mensaje, 'ok');
-      setTimeout(() => { scanning = true; requestAnimationFrame(tickScan); }, 1400);
+      setTimeout(() => { iniciarCamara(); }, 1400);
     } catch (err) {
       mostrarMsg('msg', 'Error: ' + err.message, 'error');
     }
@@ -350,8 +342,7 @@ async function confirmar() {
     mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
     setTimeout(() => {
       document.getElementById('pieceCard').classList.remove('show');
-      scanning = true;
-      requestAnimationFrame(tickScan);
+      iniciarCamara();
     }, 1400);
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
