@@ -120,6 +120,7 @@
   <div class="tabpanel show" id="tabEscaneo">
     <div class="estacion-grid" id="estacionGrid"></div>
     <div id="scanBox">
+      <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
       <video id="video" playsinline></video>
       <canvas id="canvas"></canvas>
       <div class="cam-note" id="camNote"></div>
@@ -244,9 +245,9 @@ function seleccionarEstacion(proceso, btnEl) {
   document.querySelectorAll('.estacion-btn').forEach(b => b.classList.remove('active'));
   btnEl.classList.add('active');
   document.getElementById('scanBox').classList.add('show');
+  document.getElementById('btnIniciarCamara').style.display = scanning ? 'none' : 'block';
   ocultarMsg('msg');
   document.getElementById('pieceCard').classList.remove('show');
-  iniciarCamara();
 }
 
 function iniciarCamara() {
@@ -260,6 +261,7 @@ function iniciarCamara() {
       video.play();
       scanning = true;
       document.getElementById('camNote').textContent = '';
+      document.getElementById('btnIniciarCamara').style.display = 'none';
       requestAnimationFrame(tickScan);
     })
     .catch(err => {
