@@ -252,7 +252,7 @@ function seleccionarEstacion(proceso, btnEl) {
 function iniciarCamara() {
   if (scanning) return;
   const video = document.getElementById('video');
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } })
     .then(s => {
       stream = s;
       video.srcObject = stream;
@@ -500,4 +500,3 @@ function ocultarMsg(id) {
 </script>
 </body>
 </html>
-
