@@ -121,8 +121,11 @@
 
   .vg-ambiente{margin-bottom:14px;}
   .vg-ambiente-title{background:var(--steel); color:#fff; font-size:12.5px; font-weight:800; padding:8px 12px; border-radius:9px 9px 0 0;}
+  .vg-subtitle{font-size:9.5px; font-weight:800; text-transform:uppercase; color:var(--rust); background:#fff; border:1.5px solid var(--line); border-top:none; padding:6px 12px 2px;}
   .vg-modulo{background:#fff; border:1.5px solid var(--line); border-top:none;}
-  .vg-modulo-title{font-size:11.5px; font-weight:700; color:var(--ink-soft); padding:7px 12px; background:#FAF9F5; border-bottom:1px solid var(--line);}
+  .vg-modulo-title{font-size:11.5px; font-weight:700; color:var(--ink-soft); padding:7px 12px; background:#FAF9F5; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:6px;}
+  .vg-modulo-id{font-size:9.5px; color:var(--ink-soft); font-family:Consolas,monospace; font-weight:400;}
+  .vg-badge-placar{font-size:8.5px; font-weight:800; text-transform:uppercase; background:var(--amber); color:#fff; padding:1px 6px; border-radius:10px;}
   .vg-pieza{display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12.5px;}
   .vg-pieza:last-child{border-bottom:none;}
   .vg-dots{display:flex; gap:3px;}
@@ -765,21 +768,52 @@ function renderVistaGeneral(res) {
   });
   html += '</div>';
 
-  Object.keys(res.ambientes).sort().forEach(ambiente => {
-    html += `<div class="vg-ambiente"><div class="vg-ambiente-title">${ambiente}</div>`;
-    const modulos = res.ambientes[ambiente];
-    Object.keys(modulos).sort().forEach(modulo => {
-      html += `<div class="vg-modulo"><div class="vg-modulo-title">${modulo}</div>`;
-      modulos[modulo].forEach(pieza => {
-        html += `<div class="vg-pieza"><span>${pieza.descripcion}</span><div class="vg-dots">`;
-        PROCESOS.forEach(p => {
-          const done = pieza.estados[p] === 'Completado';
-          html += `<div class="vg-dot ${done ? 'done' : ''}" title="${p}: ${pieza.estados[p]}"></div>`;
-        });
-        html += `</div></div>`;
-      });
-      html += `</div>`;
+  const dots = (pieza) => {
+    let d = '<div class="vg-dots">';
+    PROCESOS.forEach(p => {
+      const done = pieza.estados[p] === 'Completado';
+      d += `<div class="vg-dot ${done ? 'done' : ''}" title="${p}: ${pieza.estados[p]}"></div>`;
     });
+    return d + '</div>';
+  };
+
+  Object.keys(res.ambientes).sort().forEach(ambiente => {
+    const amb = res.ambientes[ambiente];
+    html += `<div class="vg-ambiente"><div class="vg-ambiente-title">${ambiente}</div>`;
+
+    if (amb.modulos.length) {
+      html += `<div class="vg-subtitle">Módulos armados</div>`;
+      amb.modulos.forEach(m => {
+        html += `<div class="vg-modulo"><div class="vg-modulo-title">${m.nombre} <span class="vg-modulo-id">ID: ${m.moduloId || '—'}</span></div>`;
+        m.piezas.forEach(pieza => {
+          html += `<div class="vg-pieza"><span>${pieza.descripcion}</span>${dots(pieza)}</div>`;
+        });
+        html += `</div>`;
+      });
+    }
+
+    if (amb.placares.length) {
+      html += `<div class="vg-subtitle">Placares</div>`;
+      amb.placares.forEach(pl => {
+        html += `<div class="vg-modulo"><div class="vg-modulo-title">Placar <span class="vg-modulo-id">ID: ${pl.moduloId}</span> <span class="vg-badge-placar">Placar</span></div>`;
+        pl.piezas.forEach(pieza => {
+          html += `<div class="vg-pieza"><span>${pieza.descripcion}</span>${dots(pieza)}</div>`;
+        });
+        html += `</div>`;
+      });
+    }
+
+    if (amb.genericas.length) {
+      html += `<div class="vg-subtitle">Piezas sueltas genéricas</div>`;
+      amb.genericas.forEach(g => {
+        html += `<div class="vg-modulo"><div class="vg-modulo-title">${g.descripcion} <span class="vg-modulo-id">${g.medida}</span></div>`;
+        g.piezas.forEach(pieza => {
+          html += `<div class="vg-pieza"><span>${pieza.claveUnica}</span>${dots(pieza)}</div>`;
+        });
+        html += `</div>`;
+      });
+    }
+
     html += `</div>`;
   });
 
@@ -797,3 +831,4 @@ function ocultarMsg(id) {
 </script>
 </body>
 </html>
+
