@@ -1,657 +1,857 @@
-/**
- * ============================================================================
- * APP DE ESCANEO - Sistema de Trazabilidad Industrial Interna
- * ============================================================================
- * Google Apps Script atado directamente al Google Sheet de la Base de Datos.
- * Se despliega como "Aplicacion web" (Implementar > Nueva implementacion),
- * queda con una URL propia que cualquiera abre desde el navegador del celu,
- * sin instalar nada.
- * ============================================================================
- */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escaneo — Sistema de Trazabilidad</title>
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<style>
+  :root{
+    --bg:#EFEDE6; --panel:#FFFFFF; --ink:#1C2027; --ink-soft:#75797F; --line:#E3E0D6;
+    --steel:#233240; --rust:#B5502E; --teal:#1B7F63; --teal-bg:#E7F4EE; --amber:#DE9A34;
+    --font:'Segoe UI', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); padding-bottom:40px;}
+  .header{background:var(--steel); color:#fff; padding:16px; text-align:center;}
+  .header h1{font-size:16px; margin:0; font-weight:800;}
+  .header .sub{font-size:11.5px; opacity:.8; margin-top:2px;}
 
-const NOMBRE_HOJA_PIEZAS = "Piezas";
-const NOMBRE_HOJA_PANOL = "Panol";
-const NOMBRE_HOJA_RETRABAJOS = "Retrabajos_Pedidos";
-const NOMBRE_HOJA_CONTROL_PLACAS = "Control_Placas";
+  .tabbar{display:flex; background:#1A232C; position:sticky; top:0; z-index:10; overflow-x:auto;}
+  .tabbtn{flex:1; padding:12px 4px; text-align:center; color:#9AA3AC; font-size:11px; font-weight:800; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;}
+  .tabbtn.active{color:#fff; border-bottom-color:var(--rust);}
 
-// ID de tu Google Sheet real (Base de Datos) -- si alguna vez cambia de
-// Sheet, solo hay que actualizar este ID.
-const SPREADSHEET_ID = "1hD0yG4ShIxjAv148pKwC3OAqwec4vVAkKkDk1oMtfF4";
+  .wrap{max-width:480px; margin:0 auto; padding:16px;}
+  .tabpanel{display:none;}
+  .tabpanel.show{display:block;}
+
+  .estacion-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px;}
+  .estacion-btn{
+    padding:14px 8px; border:1.5px solid var(--line); border-radius:10px; background:#fff;
+    font-size:12.5px; font-weight:700; color:var(--ink-soft); cursor:pointer; text-align:center;
+  }
+  .estacion-btn.active{background:var(--rust); border-color:var(--rust); color:#fff;}
+  .vg-back{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--steel); cursor:pointer; margin-bottom:12px;}
+  .vg-crumb{font-size:11px; color:var(--ink-soft); margin-bottom:10px;}
+  .vg-crumb b{color:var(--ink);}
+
+  #scanBox{display:none;}
+  .section-divider{font-size:11px; font-weight:800; text-transform:uppercase; color:var(--ink-soft); border-top:1.5px solid var(--line); margin:16px 0 4px; padding-top:12px;}
+  .scan-toggle-note{font-size:11.5px; color:var(--ink-soft); margin-bottom:10px;}
+  .modulo-card{background:#fff; border:1.5px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
+  .modulo-header{display:flex; align-items:center; gap:10px; padding:12px;}
+  .modulo-card.done .modulo-header{background:var(--teal-bg);}
+  .modulo-check{width:26px; height:26px; border-radius:6px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; cursor:pointer;}
+  .modulo-card.done .modulo-check{background:var(--teal); border-color:var(--teal);}
+  .modulo-info{flex:1; cursor:pointer;}
+  .modulo-info .ambiente{font-size:10px; text-transform:uppercase; font-weight:800; color:var(--ink-soft);}
+  .modulo-info .nombre{font-size:13.5px; font-weight:700;}
+  .modulo-info .modulo-id{font-size:10px; color:var(--ink-soft); font-family:Consolas,monospace; margin-top:1px;}
+  .expand-arrow{font-size:18px; color:var(--ink-soft); cursor:pointer; padding:4px 8px; transition:transform .2s;}
+  .expand-arrow.open{transform:rotate(180deg);}
+  .piezas-sublist{display:none; border-top:1.5px solid var(--line); background:#FAF9F5;}
+  .piezas-sublist.show{display:block;}
+  .pieza-row{display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line);}
+  .pieza-row:last-child{border-bottom:none;}
+  .pieza-estado{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .pieza-estado.completado{background:var(--teal);}
+  .pieza-estado.pendiente{background:var(--line); border:1.5px solid var(--ink-soft);}
+  .pieza-desc{flex:1; font-size:12px;}
+  .pieza-clave{font-size:9.5px; color:var(--ink-soft); font-family:Consolas,monospace;}
+  .btn-rehacer{background:var(--rust); color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:10.5px; font-weight:700; cursor:pointer; white-space:nowrap;}
+  .cantidad-badge{font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; background:var(--bg); color:var(--ink-soft); flex-shrink:0;}
+  .cantidad-badge.completo{background:var(--teal-bg); color:var(--teal);}
+  .tipo-row{display:flex; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px;}
+  .tipo-row:last-child{border-bottom:none;}
+  .tipo-row .nombre{flex:1;}
+  .tipo-row .cant{color:var(--ink-soft); font-size:11px;}
+  .pieza-check-mini{width:20px; height:20px; border-radius:5px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; cursor:pointer;}
+  .pieza-check-mini.done{background:var(--teal); border-color:var(--teal);}
+  #scanBox.show{display:block;}
+  #video{width:100%; border-radius:12px; background:#000; max-height:280px; object-fit:cover;}
+  #canvas{display:none;}
+
+  .manual-entry{margin-top:10px; display:flex; gap:6px;}
+  .manual-entry input{
+    flex:1; padding:11px; border:1.5px solid var(--line); border-radius:8px; font-size:14px;
+  }
+  .manual-entry button{
+    padding:11px 16px; background:var(--steel); color:#fff; border:none; border-radius:8px;
+    font-weight:700; font-size:13px;
+  }
+
+  .piece-card{
+    display:none; background:var(--panel); border:2px solid var(--ink); border-radius:14px;
+    padding:18px; margin-top:16px;
+  }
+  .piece-card.show{display:block;}
+  .piece-name{font-size:19px; font-weight:800; margin-bottom:2px;}
+  .piece-meta{font-size:12.5px; color:var(--ink-soft); margin-bottom:12px;}
+  .piece-field{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .piece-field b{color:var(--ink-soft); font-weight:600;}
+
+  .confirm-btn{
+    width:100%; padding:15px; background:var(--teal); color:#fff; border:none; border-radius:10px;
+    font-size:15px; font-weight:800; margin-top:16px; cursor:pointer;
+  }
+  .confirm-btn:disabled{background:#B7BCC1;}
+
+  .msg{margin-top:14px; padding:12px 14px; border-radius:9px; font-size:13px; font-weight:700; display:none;}
+  .msg.show{display:block;}
+  .msg.ok{background:var(--teal-bg); color:var(--teal);}
+  .msg.warn{background:#FDF1E0; color:#8A5A0F;}
+  .msg.error{background:#FBE7E2; color:var(--rust);}
+
+  .loading{text-align:center; padding:20px; color:var(--ink-soft); font-size:13px;}
+
+  .panol-item{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:12px; margin-bottom:8px;}
+  .panol-item .nombre{font-weight:700; font-size:13.5px; margin-bottom:6px;}
+  .panol-row{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft);}
+  .panol-row input{width:70px; padding:7px; border:1.5px solid var(--line); border-radius:6px; font-size:13px;}
+  .panol-row button{padding:8px 12px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;}
+
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px; border:1.5px solid var(--line); border-radius:8px; font-size:14px; font-family:var(--font); background:#fff;
+  }
+  .field textarea{resize:vertical; min-height:60px;}
+
+  .vg-stats{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+  .vg-stat{flex:1; min-width:70px; background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 6px; text-align:center;}
+  .vg-stat .n{font-size:17px; font-weight:800; color:var(--rust);}
+  .vg-stat .l{font-size:9px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; margin-top:2px;}
+
+  .vg-ambiente{margin-bottom:14px;}
+  .vg-ambiente-title{background:var(--steel); color:#fff; font-size:12.5px; font-weight:800; padding:8px 12px; border-radius:9px 9px 0 0;}
+  .vg-subtitle{font-size:9.5px; font-weight:800; text-transform:uppercase; color:var(--rust); background:#fff; border:1.5px solid var(--line); border-top:none; padding:6px 12px 2px;}
+  .vg-modulo{background:#fff; border:1.5px solid var(--line); border-top:none;}
+  .vg-modulo-title{font-size:11.5px; font-weight:700; color:var(--ink-soft); padding:7px 12px; background:#FAF9F5; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:6px;}
+  .vg-modulo-id{font-size:9.5px; color:var(--ink-soft); font-family:Consolas,monospace; font-weight:400;}
+  .vg-badge-placar{font-size:8.5px; font-weight:800; text-transform:uppercase; background:var(--amber); color:#fff; padding:1px 6px; border-radius:10px;}
+  .vg-pieza{display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .vg-pieza:last-child{border-bottom:none;}
+  .vg-dots{display:flex; gap:3px;}
+  .vg-dot{width:9px; height:9px; border-radius:50%; background:var(--line);}
+  .vg-dot.done{background:var(--teal);}
+
+  .cam-note{font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Sistema de Trazabilidad</h1>
+  <div class="sub">Industria Interior</div>
+</div>
+
+<div class="tabbar">
+  <div class="tabbtn active" id="tabbtnEscaneo" onclick="mostrarTab('Escaneo')">ESCANEO</div>
+  <div class="tabbtn" id="tabbtnPanol" onclick="mostrarTab('Panol')">PAÑOL</div>
+  <div class="tabbtn" id="tabbtnRetrabajo" onclick="mostrarTab('Retrabajo')">RETRABAJO</div>
+  <div class="tabbtn" id="tabbtnVistaGeneral" onclick="mostrarTab('VistaGeneral')">VISTA GRAL.</div>
+</div>
+
+<div class="wrap">
+
+  <div class="tabpanel show" id="tabEscaneo">
+    <div class="estacion-grid" id="estacionGrid"></div>
+    <div id="checklistBox" style="display:none;">
+      <div class="manual-entry" style="margin-bottom:10px;">
+        <input type="text" id="checklistObra" placeholder="Nombre de la obra (ej: T 02549 - NOBU HOUSIND 21 C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
+        <button onclick="cargarModulosChecklist()">Cargar</button>
+      </div>
+
+      <div class="section-divider">Módulos armados de fábrica</div>
+      <div id="modulosLista"></div>
+
+      <div class="section-divider">Piezas sueltas genéricas</div>
+      <div class="scan-toggle-note">Cenefas, ajustes, laterales aplicados, revestimientos, banquinas, etc. Cada pieza se tilda o escanea individual.</div>
+      <div id="genericasLista"></div>
+
+      <div class="section-divider">Placares (piezas sueltas armadas en obra)</div>
+      <div class="scan-toggle-note" id="placarNote"></div>
+      <div id="placaresLista"></div>
+    </div>
+
+    <div id="scanBox">
+      <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div class="cam-note" id="camNote"></div>
+      <div class="manual-entry">
+        <input type="text" id="manualInput" placeholder="O escribí / escaneá la Clave Única" onkeydown="if(event.key==='Enter') buscarManual()" autofocus>
+        <button onclick="buscarManual()">Buscar</button>
+      </div>
+    </div>
+    <div class="piece-card" id="pieceCard"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="tabpanel" id="tabPanol">
+    <div class="field">
+      <label>Obra</label>
+      <input type="text" id="panolObra" placeholder="Ej: T 02549" value="T 02549">
+    </div>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarPanol()">Cargar lista de Pañol</button>
+    <div id="panolLista" style="margin-top:16px;"></div>
+    <div class="msg" id="msgPanol"></div>
+  </div>
+
+  <div class="tabpanel" id="tabRetrabajo">
+    <div class="manual-entry" style="margin-top:0;">
+      <input type="text" id="retrabajoInput" placeholder="Clave Única de la pieza" onkeydown="if(event.key==='Enter') buscarPiezaRetrabajo()">
+      <button onclick="buscarPiezaRetrabajo()">Buscar</button>
+    </div>
+    <div class="piece-card" id="pieceCardRetrabajo"></div>
+
+    <div id="formRetrabajo" style="display:none; margin-top:16px;">
+      <div class="field">
+        <label>Motivo</label>
+        <select id="retMotivo">
+          <option>Error Técnico (Medición/Diseño)</option>
+          <option>Error Productivo (Mecanizado)</option>
+          <option>Error Comercial (Venta)</option>
+          <option>Adicional obra</option>
+          <option>Faltante en Obra</option>
+          <option>Mal Canteado / Despegado</option>
+          <option>Mal Cortado</option>
+          <option>Rayado / Golpeado</option>
+          <option>Otro motivo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Solicitado por (tu nombre)</label>
+        <input type="text" id="retSolicitante" placeholder="Ej: Cristian">
+      </div>
+      <div class="field">
+        <label>Rol</label>
+        <select id="retRol">
+          <option>Técnico</option>
+          <option>Encargado de Maquina</option>
+          <option>Armador</option>
+          <option>Encargado General</option>
+          <option>Instalador</option>
+          <option>Comercial</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Observaciones</label>
+        <textarea id="retObs" placeholder="Detalle del problema..."></textarea>
+      </div>
+      <button class="confirm-btn" onclick="enviarRetrabajo()">Generar pedido</button>
+    </div>
+    <div class="msg" id="msgRetrabajo"></div>
+  </div>
+
+  <div class="tabpanel" id="tabVistaGeneral">
+    <div class="field">
+      <label>Obra</label>
+      <input type="text" id="vgObra" placeholder="Ej: T 02549 - NOBU HOUSIND 21 C" value="T 02549 - NOBU HOUSIND 21 C">
+    </div>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarVistaGeneral()">Actualizar Vista General</button>
+    <div id="vgStats" style="margin-top:12px;"></div>
+    <div id="vgContent" style="margin-top:16px;"></div>
+    <div class="msg" id="msgVG"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACION -- pegar acá la URL de tu Apps Script (/exec)
+// ============================================================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3S8eZwB3WNZOi0fDrS4bPIaU3fgRcal2tGjdnHMSvKh9rSVz2DQhy-EoNZmolZinX/exec";
 
 const PROCESOS = ["Corte", "Pegado", "Mecanizado", "Armado", "Logistica", "Instalacion"];
+let estacionActual = null;
+let piezaActual = null;
+let piezaActualRetrabajo = null;
+let scanning = false;
+let zxingReader = null;
 
-// ============================================================================
-// SERVIR LA PAGINA WEB
-// ============================================================================
-
-// ============================================================================
-// SERVIR LA PAGINA WEB -- o responder como API JSON, si viene con ?action=...
-// (esto ultimo es para la version alojada afuera de Apps Script, en
-// GitHub Pages, que necesita la camara real sin el envoltorio de Apps Script)
-// ============================================================================
-
-function doGet(e) {
-  if (e && e.parameter && e.parameter.action) {
-    return _responderComoAPI(e.parameter);
-  }
-  return HtmlService.createTemplateFromFile("Scan")
-    .evaluate()
-    .setTitle("Escaneo — Sistema de Trazabilidad")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+async function llamarAPI(action, params) {
+  params = params || {};
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('action', action);
+  Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
+  const resp = await fetch(url.toString());
+  return await resp.json();
 }
 
-function _responderComoAPI(params) {
-  let resultado;
-  try {
-    switch (params.action) {
-      case "buscarPieza":
-        resultado = buscarPieza(params.clave);
-        break;
-      case "confirmarEscaneo":
-        resultado = confirmarEscaneo(params.clave, params.proceso);
-        break;
-      case "getPanolItems":
-        resultado = getPanolItems(params.obra);
-        break;
-      case "confirmarPanolItem":
-        resultado = confirmarPanolItem(Number(params.fila), params.cantidad);
-        break;
-      case "generarRetrabajo":
-        resultado = generarRetrabajo(JSON.parse(params.datos));
-        break;
-      case "getVistaGeneral":
-        resultado = getVistaGeneral(params.obra);
-        break;
-      case "getModulosPorProceso":
-        resultado = getModulosPorProceso(params.obra, params.proceso);
-        break;
-      case "confirmarModuloProceso":
-        resultado = confirmarModuloProceso(params.obra, params.ambiente, params.moduloId, params.proceso);
-        break;
-      case "getPiezasDeModulo":
-        resultado = getPiezasDeModulo(params.obra, params.ambiente, params.moduloId, params.proceso);
-        break;
-      case "getPiezasSueltasAgrupadas":
-        resultado = getPiezasSueltasAgrupadas(params.obra, params.proceso);
-        break;
-      case "getModulosPlacar":
-        resultado = getModulosPlacar(params.obra, params.proceso);
-        break;
-      case "registrarPlacaEscaneada":
-        resultado = registrarPlacaEscaneada(params.codigo);
-        break;
-      default:
-        resultado = { error: "Accion desconocida: " + params.action };
-    }
-  } catch (err) {
-    resultado = { error: err.message };
-  }
-  return ContentService.createTextOutput(JSON.stringify(resultado))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-// ============================================================================
-// UTILIDADES DE PLANILLA -- todo por NOMBRE de columna, no por indice fijo,
-// para que no se rompa si alguien agrega/reordena columnas en el Sheet.
-// ============================================================================
-
-function _abrirHoja(nombre) {
-  return SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(nombre);
-}
-
-function _mapaColumnas(hoja) {
-  const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
-  const mapa = {};
-  headers.forEach((h, i) => { if (h) mapa[h.toString().trim()] = i + 1; });
-  return mapa;
-}
-
-function _buscarFilaPorClaveUnica(hoja, mapa, claveUnica) {
-  const colClave = mapa["Clave Unica (Correlativo-Ambiente)"] || mapa["Clave Unica"];
-  if (!colClave) throw new Error("No se encontro la columna 'Clave Unica' en la hoja Piezas");
-  const valores = hoja.getRange(2, colClave, hoja.getLastRow() - 1, 1).getValues();
-  for (let i = 0; i < valores.length; i++) {
-    if (String(valores[i][0]).trim().toUpperCase() === String(claveUnica).trim().toUpperCase()) {
-      return i + 2;
-    }
-  }
-  return null;
-}
-
-// ============================================================================
-// BUSCAR PIEZA POR CLAVE UNICA (lo que el QR trae codificado)
-// ============================================================================
-
-function buscarPieza(claveUnica) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas' en este Sheet" };
-
-  const mapa = _mapaColumnas(hoja);
-  const fila = _buscarFilaPorClaveUnica(hoja, mapa, claveUnica);
-  if (!fila) return { error: "No se encontro ninguna pieza con esa Clave Unica: " + claveUnica };
-
-  const valores = hoja.getRange(fila, 1, 1, hoja.getLastColumn()).getValues()[0];
-  const get = (nombreCol) => {
-    const idx = mapa[nombreCol];
-    return idx ? valores[idx - 1] : "";
-  };
-
-  const estados = {};
-  PROCESOS.forEach(p => {
-    estados[p] = {
-      estado: get("Estado " + p) || "Pendiente",
-      fecha: get("Fecha " + p) || "",
-    };
+function mostrarTab(nombre) {
+  ["Escaneo", "Panol", "Retrabajo", "VistaGeneral"].forEach(t => {
+    document.getElementById('tab' + t).classList.toggle('show', t === nombre);
+    document.getElementById('tabbtn' + t).classList.toggle('active', t === nombre);
   });
-
-  return {
-    ok: true,
-    fila: fila,
-    claveUnica: get("Clave Unica (Correlativo-Ambiente)") || get("Clave Unica"),
-    correlativo: get("Correlativo"),
-    obra: get("Obra"),
-    ambiente: get("Ambiente"),
-    pieza: get("Descripcion"),
-    tipo: get("Tipo"),
-    material: get("Material / Referencia"),
-    medida: get("Medida"),
-    grupo: get("Grupo (Informe x Modulo)") || get("Grupo"),
-    requierePegado: (get("Requiere Pegado") || "").toString().toLowerCase() === "si",
-    requiereMecanizado: (get("Requiere Mecanizado") || "").toString().toLowerCase() === "si",
-    estados: estados,
-  };
+  if (nombre !== 'Escaneo') { detenerCamara(); }
 }
 
-// ============================================================================
-// CONFIRMAR ESCANEO
-// ============================================================================
-
-function confirmarEscaneo(claveUnica, proceso) {
-  if (PROCESOS.indexOf(proceso) === -1) {
-    return { error: "Proceso invalido: " + proceso };
-  }
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  const mapa = _mapaColumnas(hoja);
-  const fila = _buscarFilaPorClaveUnica(hoja, mapa, claveUnica);
-  if (!fila) return { error: "No se encontro la pieza: " + claveUnica };
-
-  const colEstado = mapa["Estado " + proceso];
-  const colFecha = mapa["Fecha " + proceso];
-  if (!colEstado || !colFecha) {
-    return { error: "No existen las columnas 'Estado " + proceso + "' / 'Fecha " + proceso + "' en la hoja Piezas" };
-  }
-
-  const estadoActual = hoja.getRange(fila, colEstado).getValue();
-  if (estadoActual === "Completado") {
-    const fechaOriginal = hoja.getRange(fila, colFecha).getValue();
-    return {
-      ok: true,
-      duplicado: true,
-      mensaje: "Ya estaba escaneada en " + proceso + " — hora original: " + Utilities.formatDate(new Date(fechaOriginal), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm"),
-    };
-  }
-
-  const ahora = new Date();
-  hoja.getRange(fila, colEstado).setValue("Completado");
-  hoja.getRange(fila, colFecha).setValue(ahora);
-
-  // MODULO COMPLETO: si esta pieza pertenece a un modulo armado de fabrica
-  // (Grupo distinto de "Pieza suelta"), escanear UNA sola pieza confirma
-  // TODAS las piezas de ese mismo modulo para Armado, Logistica e Instalacion.
-  // Se agrupa por Modulo-ID (no por el texto de Grupo) -- el mismo nombre
-  // descriptivo puede repetirse en modulos fisicamente distintos.
-  let piezasModuloConfirmadas = 0;
-  const colGrupo = mapa["Grupo (Informe x Modulo)"] || mapa["Grupo"];
-  const colModuloId = mapa["Modulo-ID"];
-  const procesosEnCascada = PROCESOS_CON_CHECKLIST;
-  if (colGrupo && colModuloId && procesosEnCascada.indexOf(proceso) !== -1) {
-    const grupo = hoja.getRange(fila, colGrupo).getValue();
-    const moduloId = hoja.getRange(fila, colModuloId).getValue();
-    if (grupo && grupo !== "Pieza suelta") {
-      const colObra = mapa["Obra"];
-      const colAmbiente = mapa["Ambiente"];
-      const colClave = mapa["Clave Unica (Correlativo-Ambiente)"] || mapa["Clave Unica"];
-      const obraActual = hoja.getRange(fila, colObra).getValue();
-      const ambienteActual = hoja.getRange(fila, colAmbiente).getValue();
-      const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-      datos.forEach((f, i) => {
-        const filaReal = i + 2;
-        if (filaReal === fila) return; // la pieza escaneada ya se marco arriba
-        if (f[colObra - 1] === obraActual && f[colAmbiente - 1] === ambienteActual && String(f[colModuloId - 1]) === String(moduloId)) {
-          if (f[colEstado - 1] !== "Completado") {
-            hoja.getRange(filaReal, colEstado).setValue("Completado");
-            hoja.getRange(filaReal, colFecha).setValue(ahora);
-            piezasModuloConfirmadas++;
-          }
-        }
-      });
-    }
-  }
-
-  return {
-    ok: true,
-    duplicado: false,
-    mensaje: proceso + " confirmado correctamente" + (piezasModuloConfirmadas > 0 ? ` — módulo completo (+${piezasModuloConfirmadas} piezas más confirmadas junto con esta)` : ""),
-    piezasModuloConfirmadas: piezasModuloConfirmadas,
-  };
-}
-
-// ============================================================================
-// GENERAR RETRABAJO / PEDIDO
-// ============================================================================
-
-function generarRetrabajo(datos) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_RETRABAJOS);
-  if (!hoja) return { error: "No se encontro la hoja 'Retrabajos_Pedidos'" };
-
-  const idPedido = "RET-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyMMdd-HHmmss");
-  const requiereAprobacion = ["Encargado de Maquina", "Armador"].indexOf(datos.rol) !== -1
-    && ["Mal Cortado", "Mal Canteado / Despegado", "Rayado / Golpeado"].indexOf(datos.motivo) !== -1;
-
-  hoja.appendRow([
-    idPedido, datos.obra, datos.claveUnica, datos.ambiente, datos.motivo,
-    datos.solicitadoPor, datos.rol, new Date(), "",
-    "", requiereAprobacion ? "Pendiente de aprobacion" : "Aprobado", datos.observaciones || "",
-  ]);
-
-  return { ok: true, idPedido: idPedido, requiereAprobacion: requiereAprobacion };
-}
-
-// ============================================================================
-// PAÑOL
-// ============================================================================
-
-function getPanolItems(obra) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PANOL);
-  if (!hoja) return { error: "No se encontro la hoja 'Panol'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-
-  const items = [];
-  datos.forEach((fila, i) => {
-    const filaObra = fila[(mapa["Obra"] || 1) - 1];
-    if (String(filaObra).trim() === String(obra).trim()) {
-      items.push({
-        fila: i + 2,
-        descripcion: fila[(mapa["Descripcion"] || 4) - 1],
-        unidad: fila[(mapa["Unidad Medida"] || 5) - 1],
-        requerido: fila[(mapa["Cantidad Requerida"] || 6) - 1],
-        entregado: fila[(mapa["Cantidad Entregada"] || 7) - 1],
-      });
-    }
-  });
-  return { ok: true, items: items };
-}
-
-function confirmarPanolItem(fila, cantidadEntregada) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PANOL);
-  const mapa = _mapaColumnas(hoja);
-  const colEntregado = mapa["Cantidad Entregada"];
-  hoja.getRange(fila, colEntregado).setValue(cantidadEntregada);
-  return { ok: true };
-}
-
-// ============================================================================
-// VISTA GENERAL (solo lectura) -- agrupa las piezas de una obra por
-// Ambiente -> Modulo/Grupo, con el estado real de cada proceso.
-// ============================================================================
-
-function getVistaGeneral(obra) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-
-  const get = (fila, nombreCol) => {
-    const idx = mapa[nombreCol];
-    return idx ? fila[idx - 1] : "";
-  };
-
-  // Estructura por ambiente: "modulos" (cocinas/vanitorys/placares, agrupados
-  // por ID real) y "genericas" (cenefas/ajustes/etc, agrupadas por
-  // Descripcion+Medida) -- misma logica de clasificacion que el resto del
-  // sistema (checklist de Armado/Logistica/Instalacion).
-  const ambientes = {};
-  let totalPiezas = 0;
-  const totalesProceso = {};
-  PROCESOS.forEach(p => totalesProceso[p] = 0);
-
-  datos.forEach(fila => {
-    const filaObra = String(get(fila, "Obra")).trim();
-    if (filaObra !== String(obra).trim()) return;
-
-    const ambiente = get(fila, "Ambiente") || "Sin ambiente";
-    const grupo = get(fila, "Grupo (Informe x Modulo)") || get(fila, "Grupo") || "Sin módulo";
-    const moduloId = String(get(fila, "Modulo-ID") || "").trim();
-    const esPiezaSuelta = grupo === "Pieza suelta";
-    const tipoAgrupacion = !esPiezaSuelta ? "modulo" : (moduloId ? "placar" : "generica");
-
-    const estados = {};
-    let procesosCompletados = 0;
-    PROCESOS.forEach(p => {
-      const est = get(fila, "Estado " + p) || "Pendiente";
-      estados[p] = est;
-      if (est === "Completado") { procesosCompletados++; totalesProceso[p]++; }
-    });
-
-    ambientes[ambiente] = ambientes[ambiente] || { modulos: {}, placares: {}, genericas: {} };
-
-    const pieza = {
-      claveUnica: get(fila, "Clave Unica (Correlativo-Ambiente)") || get(fila, "Clave Unica"),
-      descripcion: get(fila, "Descripcion"),
-      medida: get(fila, "Medida"),
-      tipo: get(fila, "Tipo"),
-      estados: estados,
-      procesosCompletados: procesosCompletados,
-    };
-
-    if (tipoAgrupacion === "modulo") {
-      const key = grupo + "||" + moduloId;
-      ambientes[ambiente].modulos[key] = ambientes[ambiente].modulos[key] || { nombre: grupo, moduloId: moduloId, piezas: [] };
-      ambientes[ambiente].modulos[key].piezas.push(pieza);
-    } else if (tipoAgrupacion === "placar") {
-      ambientes[ambiente].placares[moduloId] = ambientes[ambiente].placares[moduloId] || { moduloId: moduloId, piezas: [] };
-      ambientes[ambiente].placares[moduloId].piezas.push(pieza);
-    } else {
-      const key = pieza.descripcion + "||" + pieza.medida;
-      ambientes[ambiente].genericas[key] = ambientes[ambiente].genericas[key] || { descripcion: pieza.descripcion, medida: pieza.medida, piezas: [] };
-      ambientes[ambiente].genericas[key].piezas.push(pieza);
-    }
-    totalPiezas++;
-  });
-
-  // Convertir los objetos internos (modulos/placares/genericas) a arrays para el frontend
-  const ambientesOut = {};
-  Object.keys(ambientes).forEach(amb => {
-    ambientesOut[amb] = {
-      modulos: Object.values(ambientes[amb].modulos),
-      placares: Object.values(ambientes[amb].placares),
-      genericas: Object.values(ambientes[amb].genericas),
-    };
-  });
-
-  return { ok: true, obra: obra, totalPiezas: totalPiezas, totalesProceso: totalesProceso, ambientes: ambientesOut };
-}
-
-// ============================================================================
-// CHECKLIST DE MODULOS (sin escanear) -- para Armado, Logistica e Instalacion.
-// Las piezas sueltas siguen escaneandose como siempre en estos 3 procesos.
-// ============================================================================
+const grid = document.getElementById('estacionGrid');
+PROCESOS.forEach(p => {
+  const btn = document.createElement('div');
+  btn.className = 'estacion-btn';
+  btn.textContent = p;
+  btn.onclick = () => seleccionarEstacion(p, btn);
+  grid.appendChild(btn);
+});
 
 const PROCESOS_CON_CHECKLIST = ["Armado", "Logistica", "Instalacion"];
 
-function getModulosPorProceso(obra, proceso) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
+function seleccionarEstacion(proceso, btnEl) {
+  estacionActual = proceso;
+  document.querySelectorAll('.estacion-btn').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  document.getElementById('scanBox').classList.add('show');
+  document.getElementById('btnIniciarCamara').style.display = scanning ? 'none' : 'block';
+  ocultarMsg('msg');
+  document.getElementById('pieceCard').classList.remove('show');
 
-  const get = (fila, nombreCol) => {
-    const idx = mapa[nombreCol];
-    return idx ? fila[idx - 1] : "";
-  };
-
-  // Se agrupa por Ambiente+Modulo-ID (NO por el nombre/Grupo -- el mismo nombre
-  // de modulo puede repetirse en modulos fisicamente distintos, ej: dos "Bajo
-  // Mesada 1 Puerta" con distinto ID en la misma cocina. El ID es la clave real).
-  // "Pieza suelta" se excluye, esas van por escaneo individual.
-  const modulos = {};
-  datos.forEach(fila => {
-    const filaObra = String(get(fila, "Obra")).trim();
-    if (filaObra !== String(obra).trim()) return;
-    const grupo = get(fila, "Grupo (Informe x Modulo)") || get(fila, "Grupo");
-    if (!grupo || grupo === "Pieza suelta" || grupo === "Sin informe (pendiente)") return;
-
-    const ambiente = get(fila, "Ambiente") || "Sin ambiente";
-    const moduloId = get(fila, "Modulo-ID") || "";
-    const key = ambiente + "||" + moduloId;
-    const estadoProceso = get(fila, "Estado " + proceso) || "Pendiente";
-
-    modulos[key] = modulos[key] || { ambiente: ambiente, moduloId: moduloId, grupo: grupo, totalPiezas: 0, piezasCompletadas: 0 };
-    modulos[key].totalPiezas++;
-    if (estadoProceso === "Completado") modulos[key].piezasCompletadas++;
-  });
-
-  const lista = Object.values(modulos).map(m => ({
-    ambiente: m.ambiente,
-    moduloId: m.moduloId,
-    grupo: m.grupo,
-    completado: m.piezasCompletadas === m.totalPiezas,
-  }));
-  lista.sort((a, b) => (a.ambiente + a.moduloId).localeCompare(b.ambiente + b.moduloId));
-
-  return { ok: true, obra: obra, proceso: proceso, modulos: lista };
+  const esChecklist = PROCESOS_CON_CHECKLIST.indexOf(proceso) !== -1;
+  document.getElementById('checklistBox').style.display = esChecklist ? 'block' : 'none';
+  if (esChecklist) {
+    const obraGuardada = document.getElementById('checklistObra').value.trim();
+    if (obraGuardada) cargarModulosChecklist();
+  }
 }
 
-function confirmarModuloProceso(obra, ambiente, moduloId, proceso) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  const mapa = _mapaColumnas(hoja);
-  const colObra = mapa["Obra"];
-  const colAmbiente = mapa["Ambiente"];
-  const colModuloId = mapa["Modulo-ID"];
-  const colEstado = mapa["Estado " + proceso];
-  const colFecha = mapa["Fecha " + proceso];
-  if (!colEstado || !colFecha) return { error: "No existen las columnas de " + proceso + " en la hoja Piezas" };
+let obraChecklistActual = '';
 
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-  const ahora = new Date();
-  let confirmadas = 0;
-  datos.forEach((f, i) => {
-    if (f[colObra - 1] === obra && f[colAmbiente - 1] === ambiente && String(f[colModuloId - 1]) === String(moduloId)) {
-      const filaReal = i + 2;
-      if (f[colEstado - 1] !== "Completado") {
-        hoja.getRange(filaReal, colEstado).setValue("Completado");
-        hoja.getRange(filaReal, colFecha).setValue(ahora);
-        confirmadas++;
+async function cargarModulosChecklist() {
+  const obra = document.getElementById('checklistObra').value.trim();
+  if (!obra) return;
+  obraChecklistActual = obra;
+  cargarModulos();
+  cargarGenericas();
+  cargarPlacares();
+}
+
+async function cargarModulos() {
+  const obra = obraChecklistActual;
+  document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">Cargando módulos...</div>';
+  try {
+    const res = await llamarAPI('getModulosPorProceso', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('modulosLista').innerHTML = ''; mostrarMsg('msg', res.error, 'error'); return; }
+    if (!res.modulos.length) {
+      document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">No hay módulos armados de fábrica para esta obra (o son todo piezas sueltas).</div>';
+      return;
+    }
+    document.getElementById('modulosLista').innerHTML = res.modulos.map((m, i) => `
+      <div class="modulo-card ${m.completado ? 'done' : ''}" id="modulo-${i}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="toggleModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+          <div class="modulo-info" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">
+            <div class="ambiente">${m.ambiente}</div>
+            <div class="nombre">${m.grupo}</div>
+            <div class="modulo-id">ID módulo: ${m.moduloId}</div>
+          </div>
+          <div class="expand-arrow" id="arrow-${i}" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">▾</div>
+        </div>
+        <div class="piezas-sublist" id="piezas-${i}"></div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function toggleModulo(i, obra, ambiente, moduloId) {
+  const el = document.getElementById('modulo-' + i);
+  if (el.classList.contains('done')) return;
+  el.classList.add('done');
+  el.querySelector('.modulo-check').textContent = '✓';
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.remove('done'); el.querySelector('.modulo-check').textContent = ''; return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    el.classList.remove('done');
+    el.querySelector('.modulo-check').textContent = '';
+  }
+}
+
+async function toggleExpand(i, obra, ambiente, moduloId) {
+  const sub = document.getElementById('piezas-' + i);
+  const arrow = document.getElementById('arrow-' + i);
+  const abriendo = !sub.classList.contains('show');
+  sub.classList.toggle('show');
+  arrow.classList.toggle('open');
+  if (abriendo && !sub.dataset.cargado) {
+    sub.innerHTML = '<div class="pieza-row">Cargando piezas...</div>';
+    try {
+      const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+      if (res.error) { sub.innerHTML = '<div class="pieza-row">' + res.error + '</div>'; return; }
+      sub.dataset.cargado = '1';
+      sub.innerHTML = res.piezas.map(p => `
+        <div class="pieza-row">
+          <div class="pieza-estado ${p.estado === 'Completado' ? 'completado' : 'pendiente'}"></div>
+          <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+          <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">🔧 Rehacer</button>
+        </div>
+      `).join('');
+    } catch (err) {
+      sub.innerHTML = '<div class="pieza-row">Error: ' + err.message + '</div>';
+    }
+  }
+}
+
+function rehacerPieza(claveUnica) {
+  document.getElementById('scanBox').classList.add('show');
+  document.getElementById('manualInput').value = claveUnica;
+  document.getElementById('scanBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  mostrarMsg('msg', 'Lista para reconfirmar: ' + claveUnica + ' — escaneá la pieza o tocá Buscar.', 'ok');
+}
+
+// ============================================================================
+// PIEZAS SUELTAS GENERICAS
+// ============================================================================
+
+async function cargarGenericas() {
+  const obra = obraChecklistActual;
+  document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPiezasSueltasAgrupadas', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('genericasLista').innerHTML = ''; return; }
+    if (!res.grupos.length) { document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Ninguna para esta obra.</div>'; return; }
+    document.getElementById('genericasLista').innerHTML = res.grupos.map((g, i) => `
+      <div class="modulo-card ${g.completadas === g.total ? 'done' : ''}" id="gen-${i}">
+        <div class="modulo-header">
+          <div class="info" onclick="toggleGenExpand(${i})" style="flex:1; cursor:pointer;">
+            <div class="nombre">${g.descripcion}</div>
+            <div class="modulo-id">${g.medida}</div>
+          </div>
+          <div class="cantidad-badge ${g.completadas === g.total ? 'completo' : ''}">${g.completadas}/${g.total}</div>
+          <div class="expand-arrow" id="arrow-gen-${i}" onclick="toggleGenExpand(${i})">▾</div>
+        </div>
+        <div class="piezas-sublist" id="sub-gen-${i}">
+          ${g.piezas.map(p => `
+            <div class="pieza-row">
+              <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza('${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
+              <div class="pieza-desc"><span class="pieza-clave">${p.claveUnica}</span> — ${p.ambiente}</div>
+              <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+function toggleGenExpand(i) {
+  document.getElementById('sub-gen-' + i).classList.toggle('show');
+  document.getElementById('arrow-gen-' + i).classList.toggle('open');
+}
+
+async function toggleGenericaPieza(claveUnica) {
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarGenericas();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PLACARES
+// ============================================================================
+
+function notaProcesoPlacar() {
+  if (estacionActual === 'Armado') return 'En Armado hay que tildar/escanear cada pieza individual del placar (control estricto).';
+  if (estacionActual === 'Logistica') return 'Un toque confirma todo el módulo por cantidad. Si falta algo, desplegá para ver el detalle.';
+  return 'Igual que un módulo de cocina — un toque confirma todo. Desplegable para ver el detalle.';
+}
+
+async function cargarPlacares() {
+  const obra = obraChecklistActual;
+  document.getElementById('placarNote').textContent = notaProcesoPlacar();
+  document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getModulosPlacar', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('placaresLista').innerHTML = ''; return; }
+    if (!res.modulos.length) { document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Ninguno para esta obra.</div>'; return; }
+
+    if (estacionActual === 'Armado') {
+      document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
+        <div class="modulo-card ${m.completado ? 'done' : ''}">
+          <div class="modulo-header">
+            <div class="modulo-info">
+              <div class="ambiente">${m.ambiente}</div>
+              <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
+            </div>
+            <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
+          </div>
+          <div class="piezas-sublist show" id="placar-armado-${i}">Cargando piezas...</div>
+        </div>
+      `).join('');
+      res.modulos.forEach((m, i) => cargarPiezasPlacarArmado(obra, m.ambiente, m.moduloId, i));
+      return;
+    }
+
+    document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
+      <div class="modulo-card ${m.completado ? 'done' : ''}" id="placar-${i}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="confirmarPlacarModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+          <div class="modulo-info" onclick="togglePlacarExpand(${i})">
+            <div class="ambiente">${m.ambiente}</div>
+            <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
+          </div>
+          <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
+          <div class="expand-arrow" id="arrow-placar-${i}" onclick="togglePlacarExpand(${i})">▾</div>
+        </div>
+        <div class="piezas-sublist" id="sub-placar-${i}">
+          ${m.tipos.map(t => `<div class="tipo-row"><div class="nombre">${t.tipo}</div><div class="cant">${t.completadas}/${t.cantidad}</div></div>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
+  try {
+    const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+    const el = document.getElementById('placar-armado-' + i);
+    if (!el || res.error) return;
+    el.innerHTML = res.piezas.map(p => `
+      <div class="pieza-row">
+        <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado('${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
+        <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+        <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+      </div>
+    `).join('');
+  } catch (err) { /* silencioso */ }
+}
+
+async function togglePlacarPiezaArmado(claveUnica, obra, ambiente, moduloId, i) {
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
+    cargarPlacares();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+function togglePlacarExpand(i) {
+  document.getElementById('sub-placar-' + i).classList.toggle('show');
+  document.getElementById('arrow-placar-' + i).classList.toggle('open');
+}
+
+async function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
+  const el = document.getElementById('placar-' + i);
+  if (el.classList.contains('done')) return;
+  el.classList.add('done');
+  el.querySelector('.modulo-check').textContent = '✓';
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarPlacares();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+
+function detenerCamara() {
+  scanning = false;
+  if (zxingReader) { zxingReader.reset(); }
+}
+
+function iniciarCamara() {
+  if (scanning) return;
+  const video = document.getElementById('video');
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
+  zxingReader = new ZXing.BrowserQRCodeReader(hints);
+
+  zxingReader.decodeFromConstraints(
+    { video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } },
+    video,
+    (result, err) => {
+      if (result && result.getText()) {
+        detenerCamara();
+        procesarClave(result.getText());
       }
     }
+  ).then(() => {
+    scanning = true;
+    document.getElementById('camNote').textContent = '';
+    document.getElementById('btnIniciarCamara').style.display = 'none';
+  }).catch(err => {
+    document.getElementById('camNote').textContent = 'Cámara no disponible (' + err.message + ') — usá el campo de texto.';
   });
-
-  return { ok: true, mensaje: `Módulo confirmado en ${proceso} (${confirmadas} piezas marcadas)`, confirmadas: confirmadas };
 }
 
-// ============================================================================
-// PIEZAS SUELTAS AGRUPADAS -- 2 casos distintos, ambos para Armado/Logistica/Instalacion:
-//
-// CASO A (generico): cenefa, ajustes, laterales aplicados, revestimientos,
-// banquinas, etc. -- piezas sin Modulo-ID (no pertenecen a un modulo armable),
-// se agrupan por Descripcion+Medida (mismo tipo y tamaño = un grupo con
-// cantidad). Se comporta IGUAL en los 3 procesos: cada pieza se tilda o
-// escanea individualmente, agrupada solo para que se vea mas prolijo.
-//
-// CASO B (placares): piezas SI tienen Modulo-ID (vienen de un modulo real de
-// Corte Certo) pero llegan sueltas y se arman en la obra. Se agrupan por
-// Modulo-ID, y dentro de cada modulo por tipo de pieza (Laterales, Bases,
-// Estantes, Refuerzos). El comportamiento SI cambia por proceso (lo resuelve
-// el frontend): Armado exige pieza por pieza, Logistica e Instalacion
-// permiten confirmar el modulo entero de un toque.
-//
-// NOTA: el ID de modulo de los placares puede repetirse entre modulos
-// distintos -- pendiente cruzarlo tambien con la medida para diferenciarlos
-// mejor, no resuelto todavia (dejado anotado a proposito).
-// ============================================================================
-
-function _tipoDePiezaPlacar(descripcion) {
-  const d = String(descripcion || "").toUpperCase();
-  if (d.indexOf("LATERAL") !== -1) return "Laterales";
-  if (d.indexOf("BASE") !== -1) return "Bases";
-  if (d.indexOf("ESTANTE") !== -1 && d.indexOf("MOVIL") !== -1) return "Estantes Móviles";
-  if (d.indexOf("ESTANTE") !== -1) return "Estantes Fijos";
-  if (d.indexOf("REFUERZO") !== -1) return "Refuerzos";
-  if (d.indexOf("RESPALDO") !== -1) return "Respaldos";
-  return "Otras piezas";
+function buscarManual() {
+  const val = document.getElementById('manualInput').value.trim();
+  if (val) procesarClave(val);
 }
 
-function getPiezasSueltasAgrupadas(obra, proceso) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-  const get = (fila, nombreCol) => { const idx = mapa[nombreCol]; return idx ? fila[idx - 1] : ""; };
+async function procesarClave(codigo) {
+  ocultarMsg('msg');
 
-  const grupos = {};
-  datos.forEach(fila => {
-    if (String(get(fila, "Obra")).trim() !== String(obra).trim()) return;
-    const grupo = get(fila, "Grupo (Informe x Modulo)") || get(fila, "Grupo");
-    if (grupo !== "Pieza suelta") return;
-    const moduloId = String(get(fila, "Modulo-ID") || "").trim();
-    if (moduloId) return; // esas van por getModulosPlacar (CASO B), no aca
-
-    const descripcion = get(fila, "Descripcion") || "Sin descripción";
-    const medida = get(fila, "Medida") || "";
-    const key = descripcion + "||" + medida;
-    const estado = get(fila, "Estado " + proceso) || "Pendiente";
-
-    grupos[key] = grupos[key] || { descripcion: descripcion, medida: medida, piezas: [] };
-    grupos[key].piezas.push({
-      claveUnica: get(fila, "Clave Unica (Correlativo-Ambiente)") || get(fila, "Clave Unica"),
-      ambiente: get(fila, "Ambiente"),
-      estado: estado,
-    });
-  });
-
-  const lista = Object.values(grupos).map(g => ({
-    descripcion: g.descripcion,
-    medida: g.medida,
-    total: g.piezas.length,
-    completadas: g.piezas.filter(p => p.estado === "Completado").length,
-    piezas: g.piezas,
-  }));
-  lista.sort((a, b) => (a.descripcion + a.medida).localeCompare(b.descripcion + b.medida));
-
-  return { ok: true, grupos: lista };
-}
-
-function getModulosPlacar(obra, proceso) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
-  const get = (fila, nombreCol) => { const idx = mapa[nombreCol]; return idx ? fila[idx - 1] : ""; };
-
-  const modulos = {};
-  datos.forEach(fila => {
-    if (String(get(fila, "Obra")).trim() !== String(obra).trim()) return;
-    const grupo = get(fila, "Grupo (Informe x Modulo)") || get(fila, "Grupo");
-    if (grupo !== "Pieza suelta") return;
-    const moduloId = String(get(fila, "Modulo-ID") || "").trim();
-    if (!moduloId) return; // esas van por getPiezasSueltasAgrupadas (CASO A)
-
-    const ambiente = get(fila, "Ambiente") || "Sin ambiente";
-    const key = ambiente + "||" + moduloId;
-    const tipo = _tipoDePiezaPlacar(get(fila, "Descripcion"));
-    const estado = get(fila, "Estado " + proceso) || "Pendiente";
-
-    modulos[key] = modulos[key] || { ambiente: ambiente, moduloId: moduloId, tipos: {}, totalPiezas: 0, piezasCompletadas: 0 };
-    modulos[key].tipos[tipo] = modulos[key].tipos[tipo] || { tipo: tipo, cantidad: 0, completadas: 0 };
-    modulos[key].tipos[tipo].cantidad++;
-    modulos[key].totalPiezas++;
-    if (estado === "Completado") {
-      modulos[key].tipos[tipo].completadas++;
-      modulos[key].piezasCompletadas++;
+  if (codigo.indexOf('PLANO:') === 0) {
+    document.getElementById('pieceCard').innerHTML = '<div class="loading">Registrando plano de corte...</div>';
+    document.getElementById('pieceCard').classList.add('show');
+    try {
+      const res = await llamarAPI('registrarPlacaEscaneada', { codigo });
+      document.getElementById('pieceCard').classList.remove('show');
+      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+      mostrarMsg('msg', res.mensaje, 'ok');
+      setTimeout(() => { iniciarCamara(); }, 1400);
+    } catch (err) {
+      mostrarMsg('msg', 'Error: ' + err.message, 'error');
     }
-  });
+    return;
+  }
 
-  const lista = Object.values(modulos).map(m => ({
-    ambiente: m.ambiente,
-    moduloId: m.moduloId,
-    totalPiezas: m.totalPiezas,
-    piezasCompletadas: m.piezasCompletadas,
-    completado: m.piezasCompletadas === m.totalPiezas,
-    tipos: Object.values(m.tipos),
-  }));
-  lista.sort((a, b) => (a.ambiente + a.moduloId).localeCompare(b.ambiente + b.moduloId));
-
-  return { ok: true, modulos: lista };
+  document.getElementById('pieceCard').innerHTML = '<div class="loading">Buscando pieza...</div>';
+  document.getElementById('pieceCard').classList.add('show');
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: codigo });
+    mostrarPieza(res);
+  } catch (err) {
+    mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error');
+  }
 }
 
-function getPiezasDeModulo(obra, ambiente, moduloId, proceso) {
-  const hoja = _abrirHoja(NOMBRE_HOJA_PIEZAS);
-  if (!hoja) return { error: "No se encontro la hoja 'Piezas'" };
-  const mapa = _mapaColumnas(hoja);
-  const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
+function mostrarPieza(res) {
+  if (res.error) {
+    mostrarMsg('msg', res.error, 'error');
+    document.getElementById('pieceCard').classList.remove('show');
+    return;
+  }
+  piezaActual = res;
+  const est = res.estados[estacionActual];
+  const yaCompletado = est.estado === 'Completado';
 
-  const get = (fila, nombreCol) => {
-    const idx = mapa[nombreCol];
-    return idx ? fila[idx - 1] : "";
+  document.getElementById('pieceCard').innerHTML = `
+    <div class="piece-name">${res.pieza}</div>
+    <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
+    <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
+    <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
+    <div class="piece-field"><b>Medida</b><span>${res.medida}</span></div>
+    <div class="piece-field"><b>Estado en ${estacionActual}</b><span>${yaCompletado ? 'Ya completado' : 'Pendiente'}</span></div>
+    <button class="confirm-btn" onclick="confirmar()">✓ Confirmar ${estacionActual}</button>
+  `;
+}
+
+async function confirmar() {
+  if (!piezaActual || !estacionActual) return;
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
+    setTimeout(() => {
+      document.getElementById('pieceCard').classList.remove('show');
+      iniciarCamara();
+    }, 1400);
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPanol() {
+  const obra = document.getElementById('panolObra').value.trim();
+  if (!obra) { mostrarMsg('msgPanol', 'Completá la obra', 'warn'); return; }
+  ocultarMsg('msgPanol');
+  document.getElementById('panolLista').innerHTML = '<div class="loading">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPanolItems', { obra });
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); document.getElementById('panolLista').innerHTML=''; return; }
+    if (!res.items.length) { document.getElementById('panolLista').innerHTML = '<div class="loading">No hay ítems de Pañol cargados para esta obra.</div>'; return; }
+    document.getElementById('panolLista').innerHTML = res.items.map(it => `
+      <div class="panol-item">
+        <div class="nombre">${it.descripcion}</div>
+        <div class="panol-row">
+          <span>Requerido: <b>${it.requerido} ${it.unidad || ''}</b></span>
+          <input type="text" id="panolEnt_${it.fila}" value="${it.entregado || ''}" placeholder="Entregado">
+          <button onclick="confirmarPanol(${it.fila})">Guardar</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function confirmarPanol(fila) {
+  const val = document.getElementById('panolEnt_' + fila).value;
+  try {
+    await llamarAPI('confirmarPanolItem', { fila: fila, cantidad: val });
+    mostrarMsg('msgPanol', 'Guardado correctamente', 'ok');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function buscarPiezaRetrabajo() {
+  const val = document.getElementById('retrabajoInput').value.trim();
+  if (!val) return;
+  ocultarMsg('msgRetrabajo');
+  document.getElementById('pieceCardRetrabajo').innerHTML = '<div class="loading">Buscando pieza...</div>';
+  document.getElementById('pieceCardRetrabajo').classList.add('show');
+  document.getElementById('formRetrabajo').style.display = 'none';
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: val });
+    if (res.error) {
+      mostrarMsg('msgRetrabajo', res.error, 'error');
+      document.getElementById('pieceCardRetrabajo').classList.remove('show');
+      return;
+    }
+    piezaActualRetrabajo = res;
+    document.getElementById('pieceCardRetrabajo').innerHTML = `
+      <div class="piece-name">${res.pieza}</div>
+      <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
+      <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
+      <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
+    `;
+    document.getElementById('formRetrabajo').style.display = 'block';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function enviarRetrabajo() {
+  if (!piezaActualRetrabajo) return;
+  const solicitante = document.getElementById('retSolicitante').value.trim();
+  if (!solicitante) { mostrarMsg('msgRetrabajo', 'Completá quién lo solicita', 'warn'); return; }
+
+  const datos = {
+    claveUnica: piezaActualRetrabajo.claveUnica,
+    obra: piezaActualRetrabajo.obra,
+    ambiente: piezaActualRetrabajo.ambiente,
+    motivo: document.getElementById('retMotivo').value,
+    solicitadoPor: solicitante,
+    rol: document.getElementById('retRol').value,
+    observaciones: document.getElementById('retObs').value,
   };
 
-  const piezas = [];
-  datos.forEach(fila => {
-    if (String(get(fila, "Obra")).trim() !== String(obra).trim()) return;
-    if (get(fila, "Ambiente") !== ambiente) return;
-    if (String(get(fila, "Modulo-ID")) !== String(moduloId)) return;
-    piezas.push({
-      claveUnica: get(fila, "Clave Unica (Correlativo-Ambiente)") || get(fila, "Clave Unica"),
-      descripcion: get(fila, "Descripcion"),
-      estado: get(fila, "Estado " + proceso) || "Pendiente",
-    });
+  try {
+    const res = await llamarAPI('generarRetrabajo', { datos: JSON.stringify(datos) });
+    if (res.error) { mostrarMsg('msgRetrabajo', res.error, 'error'); return; }
+    const extra = res.requiereAprobacion ? ' — queda pendiente de aprobación del Encargado General.' : '';
+    mostrarMsg('msgRetrabajo', 'Pedido ' + res.idPedido + ' generado.' + extra, 'ok');
+    document.getElementById('formRetrabajo').style.display = 'none';
+    document.getElementById('pieceCardRetrabajo').classList.remove('show');
+    document.getElementById('retrabajoInput').value = '';
+    document.getElementById('retObs').value = '';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
+}
+
+let vgData = null;
+let vgNivel = 'ambientes';
+let vgAmbienteSel = null;
+let vgGrupoSel = null;
+
+async function cargarVistaGeneral() {
+  const obra = document.getElementById('vgObra').value.trim();
+  if (!obra) { mostrarMsg('msgVG', 'Completá la obra', 'warn'); return; }
+  ocultarMsg('msgVG');
+  document.getElementById('vgContent').innerHTML = '<div class="loading">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getVistaGeneral', { obra });
+    if (res.error) { mostrarMsg('msgVG', res.error, 'error'); document.getElementById('vgContent').innerHTML=''; return; }
+    vgData = res;
+    vgNivel = 'ambientes';
+    vgAmbienteSel = null;
+    vgGrupoSel = null;
+    renderVistaGeneral();
+  } catch (err) {
+    mostrarMsg('msgVG', 'Error: ' + err.message, 'error');
+  }
+}
+
+function vgDots(pieza) {
+  let d = '<div class="vg-dots">';
+  PROCESOS.forEach(p => {
+    const done = pieza.estados[p] === 'Completado';
+    d += `<div class="vg-dot ${done ? 'done' : ''}" title="${p}: ${pieza.estados[p]}"></div>`;
   });
-
-  return { ok: true, piezas: piezas };
+  return d + '</div>';
 }
 
-// ============================================================================
-// CONTROL DE PLACAS -- procesa el QR de cabecera del Plano de Corte
-// (formato esperado del contenido del QR: "PLANO:Obra:Material:CantidadPlacas")
-// Suma esa cantidad a "Placas Reales" para esa Obra+Material -- ver seccion 8.2
-// del plan maestro. Crea la hoja/fila sola la primera vez que hace falta.
-// ============================================================================
-
-function _abrirOCrearHojaControlPlacas() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let hoja = ss.getSheetByName(NOMBRE_HOJA_CONTROL_PLACAS);
-  if (!hoja) {
-    hoja = ss.insertSheet(NOMBRE_HOJA_CONTROL_PLACAS);
-    hoja.appendRow(["Obra", "Material", "Placas Abastecidas", "Placas Esperadas (+20%)", "Placas Reales (escaneadas)", "Ultima Actualizacion"]);
-  }
-  return hoja;
+function vgIrAmbientes() { vgNivel = 'ambientes'; vgAmbienteSel = null; vgGrupoSel = null; renderVistaGeneral(); }
+function vgIrGrupos(ambiente) { vgNivel = 'grupos'; vgAmbienteSel = ambiente; vgGrupoSel = null; renderVistaGeneral(); }
+function vgIrPiezas(tipo, idx) {
+  vgNivel = 'piezas';
+  const amb = vgData.ambientes[vgAmbienteSel];
+  vgGrupoSel = { tipo: tipo, obj: (tipo === 'modulo' ? amb.modulos[idx] : tipo === 'placar' ? amb.placares[idx] : amb.genericas[idx]) };
+  renderVistaGeneral();
 }
 
-function esQRDePlano(codigo) {
-  return typeof codigo === "string" && codigo.indexOf("PLANO:") === 0;
-}
+function renderVistaGeneral() {
+  if (!vgData) return;
 
-function registrarPlacaEscaneada(codigoQR) {
-  // codigoQR esperado: "PLANO:Obra:Material:CantidadPlacas"
-  const partes = codigoQR.split(":");
-  if (partes.length < 4) return { error: "Formato de QR de plano invalido: " + codigoQR };
-  const obra = partes[1];
-  const material = partes[2];
-  const cantidad = Number(partes[3]) || 0;
+  let html = '<div class="vg-stats">';
+  html += `<div class="vg-stat"><div class="n">${vgData.totalPiezas}</div><div class="l">Total</div></div>`;
+  PROCESOS.forEach(p => {
+    html += `<div class="vg-stat"><div class="n">${vgData.totalesProceso[p]}</div><div class="l">${p}</div></div>`;
+  });
+  html += '</div>';
 
-  const hoja = _abrirOCrearHojaControlPlacas();
-  const datos = hoja.getDataRange().getValues();
+  if (vgNivel === 'ambientes') {
+    html += '<div class="estacion-grid">';
+    Object.keys(vgData.ambientes).sort().forEach(ambiente => {
+      html += `<div class="estacion-btn" onclick="vgIrGrupos('${ambiente.replace(/'/g,"\\'")}')">${ambiente}</div>`;
+    });
+    html += '</div>';
 
-  let filaEncontrada = -1;
-  for (let i = 1; i < datos.length; i++) {
-    if (String(datos[i][0]).trim() === obra.trim() && String(datos[i][1]).trim() === material.trim()) {
-      filaEncontrada = i + 1; // 1-indexed para getRange
-      break;
+  } else if (vgNivel === 'grupos') {
+    html += `<div class="vg-back" onclick="vgIrAmbientes()">← Volver a ambientes</div>`;
+    html += `<div class="vg-crumb"><b>${vgAmbienteSel}</b></div>`;
+    const amb = vgData.ambientes[vgAmbienteSel];
+    html += '<div class="estacion-grid">';
+    amb.modulos.forEach((m, i) => {
+      html += `<div class="estacion-btn" onclick="vgIrPiezas('modulo', ${i})">${m.nombre}<br><span style="font-weight:400; font-size:10px;">ID: ${m.moduloId || '—'}</span></div>`;
+    });
+    amb.placares.forEach((pl, i) => {
+      html += `<div class="estacion-btn" onclick="vgIrPiezas('placar', ${i})">Placar<br><span style="font-weight:400; font-size:10px;">ID: ${pl.moduloId}</span></div>`;
+    });
+    amb.genericas.forEach((g, i) => {
+      html += `<div class="estacion-btn" onclick="vgIrPiezas('generica', ${i})">${g.descripcion}<br><span style="font-weight:400; font-size:10px;">${g.medida}</span></div>`;
+    });
+    html += '</div>';
+    if (!amb.modulos.length && !amb.placares.length && !amb.genericas.length) {
+      html += '<div class="loading">Sin piezas en este ambiente.</div>';
     }
+
+  } else if (vgNivel === 'piezas') {
+    html += `<div class="vg-back" onclick="vgIrGrupos(vgAmbienteSel)">← Volver a ${vgAmbienteSel}</div>`;
+    const g = vgGrupoSel.obj;
+    const titulo = vgGrupoSel.tipo === 'generica' ? g.descripcion : (vgGrupoSel.tipo === 'placar' ? 'Placar' : g.nombre);
+    const sub = vgGrupoSel.tipo === 'generica' ? g.medida : ('ID: ' + g.moduloId);
+    html += `<div class="vg-crumb"><b>${vgAmbienteSel}</b> — ${titulo} (${sub})</div>`;
+    html += `<div class="vg-modulo">`;
+    g.piezas.forEach(pieza => {
+      const label = vgGrupoSel.tipo === 'generica' ? pieza.claveUnica : pieza.descripcion;
+      html += `<div class="vg-pieza"><span>${label}</span>${vgDots(pieza)}</div>`;
+    });
+    html += `</div>`;
   }
 
-  let placasReales;
-  if (filaEncontrada === -1) {
-    placasReales = cantidad;
-    hoja.appendRow([obra, material, "", "", placasReales, new Date()]);
-  } else {
-    const actual = Number(hoja.getRange(filaEncontrada, 5).getValue()) || 0;
-    placasReales = actual + cantidad;
-    hoja.getRange(filaEncontrada, 5).setValue(placasReales);
-    hoja.getRange(filaEncontrada, 6).setValue(new Date());
-  }
-
-  return {
-    ok: true,
-    mensaje: `Plano registrado: +${cantidad} placas de "${material}" — total acumulado: ${placasReales}`,
-    obra: obra, material: material, cantidadSumada: cantidad, totalAcumulado: placasReales,
-  };
+  document.getElementById('vgContent').innerHTML = html;
 }
 
-
+function mostrarMsg(id, texto, tipo) {
+  const el = document.getElementById(id);
+  el.textContent = texto;
+  el.className = 'msg show ' + tipo;
+}
+function ocultarMsg(id) {
+  document.getElementById(id).className = 'msg';
+}
+</script>
+</body>
+</html>
