@@ -33,6 +33,37 @@
   .estacion-btn.active{background:var(--rust); border-color:var(--rust); color:#fff;}
 
   #scanBox{display:none;}
+  .section-divider{font-size:11px; font-weight:800; text-transform:uppercase; color:var(--ink-soft); border-top:1.5px solid var(--line); margin:16px 0 4px; padding-top:12px;}
+  .scan-toggle-note{font-size:11.5px; color:var(--ink-soft); margin-bottom:10px;}
+  .modulo-card{background:#fff; border:1.5px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
+  .modulo-header{display:flex; align-items:center; gap:10px; padding:12px;}
+  .modulo-card.done .modulo-header{background:var(--teal-bg);}
+  .modulo-check{width:26px; height:26px; border-radius:6px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; cursor:pointer;}
+  .modulo-card.done .modulo-check{background:var(--teal); border-color:var(--teal);}
+  .modulo-info{flex:1; cursor:pointer;}
+  .modulo-info .ambiente{font-size:10px; text-transform:uppercase; font-weight:800; color:var(--ink-soft);}
+  .modulo-info .nombre{font-size:13.5px; font-weight:700;}
+  .modulo-info .modulo-id{font-size:10px; color:var(--ink-soft); font-family:Consolas,monospace; margin-top:1px;}
+  .expand-arrow{font-size:18px; color:var(--ink-soft); cursor:pointer; padding:4px 8px; transition:transform .2s;}
+  .expand-arrow.open{transform:rotate(180deg);}
+  .piezas-sublist{display:none; border-top:1.5px solid var(--line); background:#FAF9F5;}
+  .piezas-sublist.show{display:block;}
+  .pieza-row{display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line);}
+  .pieza-row:last-child{border-bottom:none;}
+  .pieza-estado{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .pieza-estado.completado{background:var(--teal);}
+  .pieza-estado.pendiente{background:var(--line); border:1.5px solid var(--ink-soft);}
+  .pieza-desc{flex:1; font-size:12px;}
+  .pieza-clave{font-size:9.5px; color:var(--ink-soft); font-family:Consolas,monospace;}
+  .btn-rehacer{background:var(--rust); color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:10.5px; font-weight:700; cursor:pointer; white-space:nowrap;}
+  .cantidad-badge{font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; background:var(--bg); color:var(--ink-soft); flex-shrink:0;}
+  .cantidad-badge.completo{background:var(--teal-bg); color:var(--teal);}
+  .tipo-row{display:flex; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px;}
+  .tipo-row:last-child{border-bottom:none;}
+  .tipo-row .nombre{flex:1;}
+  .tipo-row .cant{color:var(--ink-soft); font-size:11px;}
+  .pieza-check-mini{width:20px; height:20px; border-radius:5px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; cursor:pointer;}
+  .pieza-check-mini.done{background:var(--teal); border-color:var(--teal);}
   #scanBox.show{display:block;}
   #video{width:100%; border-radius:12px; background:#000; max-height:280px; object-fit:cover;}
   #canvas{display:none;}
@@ -119,6 +150,24 @@
 
   <div class="tabpanel show" id="tabEscaneo">
     <div class="estacion-grid" id="estacionGrid"></div>
+    <div id="checklistBox" style="display:none;">
+      <div class="manual-entry" style="margin-bottom:10px;">
+        <input type="text" id="checklistObra" placeholder="Nombre de la obra (ej: T 02549 - NOBU HOUSIND 21 C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
+        <button onclick="cargarModulosChecklist()">Cargar</button>
+      </div>
+
+      <div class="section-divider">Módulos armados de fábrica</div>
+      <div id="modulosLista"></div>
+
+      <div class="section-divider">Piezas sueltas genéricas</div>
+      <div class="scan-toggle-note">Cenefas, ajustes, laterales aplicados, revestimientos, banquinas, etc. Cada pieza se tilda o escanea individual.</div>
+      <div id="genericasLista"></div>
+
+      <div class="section-divider">Placares (piezas sueltas armadas en obra)</div>
+      <div class="scan-toggle-note" id="placarNote"></div>
+      <div id="placaresLista"></div>
+    </div>
+
     <div id="scanBox">
       <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
       <video id="video" playsinline></video>
@@ -240,6 +289,8 @@ PROCESOS.forEach(p => {
   grid.appendChild(btn);
 });
 
+const PROCESOS_CON_CHECKLIST = ["Armado", "Logistica", "Instalacion"];
+
 function seleccionarEstacion(proceso, btnEl) {
   estacionActual = proceso;
   document.querySelectorAll('.estacion-btn').forEach(b => b.classList.remove('active'));
@@ -248,7 +299,260 @@ function seleccionarEstacion(proceso, btnEl) {
   document.getElementById('btnIniciarCamara').style.display = scanning ? 'none' : 'block';
   ocultarMsg('msg');
   document.getElementById('pieceCard').classList.remove('show');
+
+  const esChecklist = PROCESOS_CON_CHECKLIST.indexOf(proceso) !== -1;
+  document.getElementById('checklistBox').style.display = esChecklist ? 'block' : 'none';
+  if (esChecklist) {
+    const obraGuardada = document.getElementById('checklistObra').value.trim();
+    if (obraGuardada) cargarModulosChecklist();
+  }
 }
+
+let obraChecklistActual = '';
+
+async function cargarModulosChecklist() {
+  const obra = document.getElementById('checklistObra').value.trim();
+  if (!obra) return;
+  obraChecklistActual = obra;
+  cargarModulos();
+  cargarGenericas();
+  cargarPlacares();
+}
+
+async function cargarModulos() {
+  const obra = obraChecklistActual;
+  document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">Cargando módulos...</div>';
+  try {
+    const res = await llamarAPI('getModulosPorProceso', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('modulosLista').innerHTML = ''; mostrarMsg('msg', res.error, 'error'); return; }
+    if (!res.modulos.length) {
+      document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">No hay módulos armados de fábrica para esta obra (o son todo piezas sueltas).</div>';
+      return;
+    }
+    document.getElementById('modulosLista').innerHTML = res.modulos.map((m, i) => `
+      <div class="modulo-card ${m.completado ? 'done' : ''}" id="modulo-${i}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="toggleModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+          <div class="modulo-info" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">
+            <div class="ambiente">${m.ambiente}</div>
+            <div class="nombre">${m.grupo}</div>
+            <div class="modulo-id">ID módulo: ${m.moduloId}</div>
+          </div>
+          <div class="expand-arrow" id="arrow-${i}" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">▾</div>
+        </div>
+        <div class="piezas-sublist" id="piezas-${i}"></div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function toggleModulo(i, obra, ambiente, moduloId) {
+  const el = document.getElementById('modulo-' + i);
+  if (el.classList.contains('done')) return;
+  el.classList.add('done');
+  el.querySelector('.modulo-check').textContent = '✓';
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.remove('done'); el.querySelector('.modulo-check').textContent = ''; return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    el.classList.remove('done');
+    el.querySelector('.modulo-check').textContent = '';
+  }
+}
+
+async function toggleExpand(i, obra, ambiente, moduloId) {
+  const sub = document.getElementById('piezas-' + i);
+  const arrow = document.getElementById('arrow-' + i);
+  const abriendo = !sub.classList.contains('show');
+  sub.classList.toggle('show');
+  arrow.classList.toggle('open');
+  if (abriendo && !sub.dataset.cargado) {
+    sub.innerHTML = '<div class="pieza-row">Cargando piezas...</div>';
+    try {
+      const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+      if (res.error) { sub.innerHTML = '<div class="pieza-row">' + res.error + '</div>'; return; }
+      sub.dataset.cargado = '1';
+      sub.innerHTML = res.piezas.map(p => `
+        <div class="pieza-row">
+          <div class="pieza-estado ${p.estado === 'Completado' ? 'completado' : 'pendiente'}"></div>
+          <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+          <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">🔧 Rehacer</button>
+        </div>
+      `).join('');
+    } catch (err) {
+      sub.innerHTML = '<div class="pieza-row">Error: ' + err.message + '</div>';
+    }
+  }
+}
+
+function rehacerPieza(claveUnica) {
+  document.getElementById('scanBox').classList.add('show');
+  document.getElementById('manualInput').value = claveUnica;
+  document.getElementById('scanBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  mostrarMsg('msg', 'Lista para reconfirmar: ' + claveUnica + ' — escaneá la pieza o tocá Buscar.', 'ok');
+}
+
+// ============================================================================
+// PIEZAS SUELTAS GENERICAS
+// ============================================================================
+
+async function cargarGenericas() {
+  const obra = obraChecklistActual;
+  document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPiezasSueltasAgrupadas', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('genericasLista').innerHTML = ''; return; }
+    if (!res.grupos.length) { document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Ninguna para esta obra.</div>'; return; }
+    document.getElementById('genericasLista').innerHTML = res.grupos.map((g, i) => `
+      <div class="modulo-card ${g.completadas === g.total ? 'done' : ''}" id="gen-${i}">
+        <div class="modulo-header">
+          <div class="info" onclick="toggleGenExpand(${i})" style="flex:1; cursor:pointer;">
+            <div class="nombre">${g.descripcion}</div>
+            <div class="modulo-id">${g.medida}</div>
+          </div>
+          <div class="cantidad-badge ${g.completadas === g.total ? 'completo' : ''}">${g.completadas}/${g.total}</div>
+          <div class="expand-arrow" id="arrow-gen-${i}" onclick="toggleGenExpand(${i})">▾</div>
+        </div>
+        <div class="piezas-sublist" id="sub-gen-${i}">
+          ${g.piezas.map(p => `
+            <div class="pieza-row">
+              <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza('${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
+              <div class="pieza-desc"><span class="pieza-clave">${p.claveUnica}</span> — ${p.ambiente}</div>
+              <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+function toggleGenExpand(i) {
+  document.getElementById('sub-gen-' + i).classList.toggle('show');
+  document.getElementById('arrow-gen-' + i).classList.toggle('open');
+}
+
+async function toggleGenericaPieza(claveUnica) {
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarGenericas();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PLACARES
+// ============================================================================
+
+function notaProcesoPlacar() {
+  if (estacionActual === 'Armado') return 'En Armado hay que tildar/escanear cada pieza individual del placar (control estricto).';
+  if (estacionActual === 'Logistica') return 'Un toque confirma todo el módulo por cantidad. Si falta algo, desplegá para ver el detalle.';
+  return 'Igual que un módulo de cocina — un toque confirma todo. Desplegable para ver el detalle.';
+}
+
+async function cargarPlacares() {
+  const obra = obraChecklistActual;
+  document.getElementById('placarNote').textContent = notaProcesoPlacar();
+  document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getModulosPlacar', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('placaresLista').innerHTML = ''; return; }
+    if (!res.modulos.length) { document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Ninguno para esta obra.</div>'; return; }
+
+    if (estacionActual === 'Armado') {
+      document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
+        <div class="modulo-card ${m.completado ? 'done' : ''}">
+          <div class="modulo-header">
+            <div class="modulo-info">
+              <div class="ambiente">${m.ambiente}</div>
+              <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
+            </div>
+            <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
+          </div>
+          <div class="piezas-sublist show" id="placar-armado-${i}">Cargando piezas...</div>
+        </div>
+      `).join('');
+      res.modulos.forEach((m, i) => cargarPiezasPlacarArmado(obra, m.ambiente, m.moduloId, i));
+      return;
+    }
+
+    document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
+      <div class="modulo-card ${m.completado ? 'done' : ''}" id="placar-${i}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="confirmarPlacarModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+          <div class="modulo-info" onclick="togglePlacarExpand(${i})">
+            <div class="ambiente">${m.ambiente}</div>
+            <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
+          </div>
+          <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
+          <div class="expand-arrow" id="arrow-placar-${i}" onclick="togglePlacarExpand(${i})">▾</div>
+        </div>
+        <div class="piezas-sublist" id="sub-placar-${i}">
+          ${m.tipos.map(t => `<div class="tipo-row"><div class="nombre">${t.tipo}</div><div class="cant">${t.completadas}/${t.cantidad}</div></div>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
+  try {
+    const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+    const el = document.getElementById('placar-armado-' + i);
+    if (!el || res.error) return;
+    el.innerHTML = res.piezas.map(p => `
+      <div class="pieza-row">
+        <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado('${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
+        <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+        <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+      </div>
+    `).join('');
+  } catch (err) { /* silencioso */ }
+}
+
+async function togglePlacarPiezaArmado(claveUnica, obra, ambiente, moduloId, i) {
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
+    cargarPlacares();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+function togglePlacarExpand(i) {
+  document.getElementById('sub-placar-' + i).classList.toggle('show');
+  document.getElementById('arrow-placar-' + i).classList.toggle('open');
+}
+
+async function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
+  const el = document.getElementById('placar-' + i);
+  if (el.classList.contains('done')) return;
+  el.classList.add('done');
+  el.querySelector('.modulo-check').textContent = '✓';
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarPlacares();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
 
 function detenerCamara() {
   scanning = false;
