@@ -159,7 +159,7 @@
     <div class="estacion-grid" id="estacionGrid"></div>
     <div id="checklistBox" style="display:none;">
       <div class="manual-entry" style="margin-bottom:10px;">
-        <input type="text" id="checklistObra" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
+        <input type="text" id="checklistObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
         <button onclick="cargarModulosChecklist()">Cargar</button>
       </div>
       <div id="checklistNav"></div>
@@ -182,7 +182,7 @@
   <div class="tabpanel" id="tabPanol">
     <div class="field">
       <label>Obra</label>
-      <input type="text" id="panolObra" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+      <input type="text" id="panolObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
     </div>
     <button class="confirm-btn" style="margin-top:0;" onclick="cargarPanol()">Cargar lista de Pañol</button>
     <div id="panolLista" style="margin-top:16px;"></div>
@@ -238,7 +238,7 @@
   <div class="tabpanel" id="tabVistaGeneral">
     <div class="field">
       <label>Obra</label>
-      <input type="text" id="vgObra" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+      <input type="text" id="vgObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
     </div>
     <button class="confirm-btn" style="margin-top:0;" onclick="cargarVistaGeneral()">Actualizar Vista General</button>
     <div id="vgStats" style="margin-top:12px;"></div>
@@ -286,6 +286,17 @@ PROCESOS.forEach(p => {
   btn.onclick = () => seleccionarEstacion(p, btn);
   grid.appendChild(btn);
 });
+
+// Autocompletado de Obra -- se llena solo con las obras reales que ya
+// existen en el Sheet, para no depender de tipear el nombre de memoria.
+(async () => {
+  try {
+    const res = await llamarAPI('getObrasDisponibles', {});
+    if (res.error) return;
+    const datalist = document.getElementById('obrasDatalist');
+    datalist.innerHTML = res.obras.map(o => `<option value="${o.replace(/"/g,'&quot;')}">`).join('');
+  } catch (err) { /* silencioso */ }
+})();
 
 const PROCESOS_CON_CHECKLIST = ["Armado", "Logistica", "Instalacion"];
 
@@ -877,5 +888,6 @@ function ocultarMsg(id) {
   document.getElementById(id).className = 'msg';
 }
 </script>
+<datalist id="obrasDatalist"></datalist>
 </body>
 </html>
