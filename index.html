@@ -41,6 +41,7 @@
   .modulo-card{background:#fff; border:1.5px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
   .modulo-header{display:flex; align-items:center; gap:10px; padding:12px;}
   .modulo-card.done .modulo-header{background:var(--teal-bg);}
+  .modulo-dibujo{width:44px; height:44px; object-fit:contain; border:1px solid var(--line); border-radius:6px; background:#fff; flex-shrink:0;}
   .modulo-check{width:26px; height:26px; border-radius:6px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; cursor:pointer;}
   .modulo-card.done .modulo-check{background:var(--teal); border-color:var(--teal);}
   .modulo-info{flex:1; cursor:pointer;}
@@ -161,17 +162,7 @@
         <input type="text" id="checklistObra" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
         <button onclick="cargarModulosChecklist()">Cargar</button>
       </div>
-
-      <div class="section-divider">Módulos armados de fábrica</div>
-      <div id="modulosLista"></div>
-
-      <div class="section-divider">Piezas sueltas genéricas</div>
-      <div class="scan-toggle-note">Cenefas, ajustes, laterales aplicados, revestimientos, banquinas, etc. Cada pieza se tilda o escanea individual.</div>
-      <div id="genericasLista"></div>
-
-      <div class="section-divider">Placares (piezas sueltas armadas en obra)</div>
-      <div class="scan-toggle-note" id="placarNote"></div>
-      <div id="placaresLista"></div>
+      <div id="checklistNav"></div>
     </div>
 
     <div id="scanBox">
@@ -316,43 +307,110 @@ function seleccionarEstacion(proceso, btnEl) {
 }
 
 let obraChecklistActual = '';
+let chkModulos = [];
+let chkGenericas = [];
+let chkPlacares = [];
+let chkNivel = 'ambientes';
+let chkAmbienteSel = null;
 
 async function cargarModulosChecklist() {
   const obra = document.getElementById('checklistObra').value.trim();
   if (!obra) return;
   obraChecklistActual = obra;
-  cargarModulos();
-  cargarGenericas();
-  cargarPlacares();
-}
+  chkNivel = 'ambientes';
+  chkAmbienteSel = null;
+  document.getElementById('checklistNav').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
 
-async function cargarModulos() {
-  const obra = obraChecklistActual;
-  document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">Cargando módulos...</div>';
   try {
-    const res = await llamarAPI('getModulosPorProceso', { obra, proceso: estacionActual });
-    if (res.error) { document.getElementById('modulosLista').innerHTML = ''; mostrarMsg('msg', res.error, 'error'); return; }
-    if (!res.modulos.length) {
-      document.getElementById('modulosLista').innerHTML = '<div class="scan-toggle-note">No hay módulos armados de fábrica para esta obra (o son todo piezas sueltas).</div>';
-      return;
-    }
-    document.getElementById('modulosLista').innerHTML = res.modulos.map((m, i) => `
-      <div class="modulo-card ${m.completado ? 'done' : ''}" id="modulo-${i}">
-        <div class="modulo-header">
-          <div class="modulo-check" onclick="toggleModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
-          <div class="modulo-info" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">
-            <div class="ambiente">${m.ambiente}</div>
-            <div class="nombre">${m.grupo}</div>
-            <div class="modulo-id">ID módulo: ${m.moduloId}</div>
-          </div>
-          <div class="expand-arrow" id="arrow-${i}" onclick="toggleExpand(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">▾</div>
-        </div>
-        <div class="piezas-sublist" id="piezas-${i}"></div>
-      </div>
-    `).join('');
+    const [rMod, rGen, rPla] = await Promise.all([
+      llamarAPI('getModulosPorProceso', { obra, proceso: estacionActual }),
+      llamarAPI('getPiezasSueltasAgrupadas', { obra, proceso: estacionActual }),
+      llamarAPI('getModulosPlacar', { obra, proceso: estacionActual }),
+    ]);
+    chkModulos = rMod.error ? [] : rMod.modulos;
+    chkGenericas = rGen.error ? [] : rGen.grupos;
+    chkPlacares = rPla.error ? [] : rPla.modulos;
+    renderChecklistNav();
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
   }
+}
+
+function chkAmbientesDisponibles() {
+  const set = new Set();
+  chkModulos.forEach(m => set.add(m.ambiente));
+  chkPlacares.forEach(p => set.add(p.ambiente));
+  chkGenericas.forEach(g => g.piezas.forEach(p => set.add(p.ambiente)));
+  return Array.from(set).sort();
+}
+
+function chkIrAmbiente(ambiente) { chkNivel = 'detalle'; chkAmbienteSel = ambiente; renderChecklistNav(); }
+function chkVolverAmbientes() { chkNivel = 'ambientes'; chkAmbienteSel = null; renderChecklistNav(); }
+
+function notaProcesoPlacar() {
+  if (estacionActual === 'Armado') return 'En Armado hay que tildar/escanear cada pieza individual del placar (control estricto).';
+  if (estacionActual === 'Logistica') return 'Un toque confirma todo el módulo por cantidad. Si falta algo, desplegá para ver el detalle.';
+  return 'Igual que un módulo de cocina — un toque confirma todo. Desplegable para ver el detalle.';
+}
+
+function renderChecklistNav() {
+  const cont = document.getElementById('checklistNav');
+
+  if (chkNivel === 'ambientes') {
+    const ambientes = chkAmbientesDisponibles();
+    if (!ambientes.length) { cont.innerHTML = '<div class="scan-toggle-note">No hay piezas para esta obra.</div>'; return; }
+    cont.innerHTML = '<div class="estacion-grid">' +
+      ambientes.map(a => `<div class="estacion-btn" onclick="chkIrAmbiente('${a.replace(/'/g,"\\'")}')">${a}</div>`).join('') +
+      '</div>';
+    return;
+  }
+
+  const amb = chkAmbienteSel;
+  const modulos = chkModulos.filter(m => m.ambiente === amb);
+  const placares = chkPlacares.filter(p => p.ambiente === amb);
+  const genericas = chkGenericas
+    .map(g => ({ ...g, piezas: g.piezas.filter(p => p.ambiente === amb) }))
+    .filter(g => g.piezas.length > 0)
+    .map(g => ({ ...g, total: g.piezas.length, completadas: g.piezas.filter(p => p.estado === 'Completado').length }));
+
+  let html = `<div class="vg-back" onclick="chkVolverAmbientes()">← Volver a ambientes</div>`;
+  html += `<div class="vg-crumb"><b>${amb}</b></div>`;
+
+  if (modulos.length) {
+    html += `<div class="section-divider">Módulos armados de fábrica</div><div id="modulosLista"></div>`;
+  }
+  if (placares.length) {
+    html += `<div class="section-divider">Placares</div><div class="scan-toggle-note" id="placarNote"></div><div id="placaresLista"></div>`;
+  }
+  if (genericas.length) {
+    html += `<div class="section-divider">Piezas sueltas genéricas</div><div class="scan-toggle-note">Cada pieza se tilda o escanea individual.</div><div id="genericasLista"></div>`;
+  }
+  if (!modulos.length && !placares.length && !genericas.length) {
+    html += `<div class="scan-toggle-note">Sin piezas en este ambiente para ${estacionActual}.</div>`;
+  }
+  cont.innerHTML = html;
+
+  if (modulos.length) renderModulosLista(modulos);
+  if (placares.length) renderPlacaresLista(placares);
+  if (genericas.length) renderGenericasLista(genericas);
+}
+
+function renderModulosLista(modulos) {
+  document.getElementById('modulosLista').innerHTML = modulos.map((m, i) => `
+    <div class="modulo-card ${m.completado ? 'done' : ''}" id="modulo-${i}">
+      <div class="modulo-header">
+        ${m.dibujo ? `<img class="modulo-dibujo" src="data:image/png;base64,${m.dibujo}" alt="Dibujo del módulo">` : ''}
+        <div class="modulo-check" onclick="toggleModulo(${i}, '${obraChecklistActual.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+        <div class="modulo-info" onclick="toggleExpand(${i}, '${obraChecklistActual.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">
+          <div class="ambiente">${m.ambiente}</div>
+          <div class="nombre">${m.grupo}</div>
+          <div class="modulo-id">ID módulo: ${m.moduloId}</div>
+        </div>
+        <div class="expand-arrow" id="arrow-${i}" onclick="toggleExpand(${i}, '${obraChecklistActual.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">▾</div>
+      </div>
+      <div class="piezas-sublist" id="piezas-${i}"></div>
+    </div>
+  `).join('');
 }
 
 async function toggleModulo(i, obra, ambiente, moduloId) {
@@ -403,41 +461,28 @@ function rehacerPieza(claveUnica) {
   mostrarMsg('msg', 'Lista para reconfirmar: ' + claveUnica + ' — escaneá la pieza o tocá Buscar.', 'ok');
 }
 
-// ============================================================================
-// PIEZAS SUELTAS GENERICAS
-// ============================================================================
-
-async function cargarGenericas() {
-  const obra = obraChecklistActual;
-  document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  try {
-    const res = await llamarAPI('getPiezasSueltasAgrupadas', { obra, proceso: estacionActual });
-    if (res.error) { document.getElementById('genericasLista').innerHTML = ''; return; }
-    if (!res.grupos.length) { document.getElementById('genericasLista').innerHTML = '<div class="scan-toggle-note">Ninguna para esta obra.</div>'; return; }
-    document.getElementById('genericasLista').innerHTML = res.grupos.map((g, i) => `
-      <div class="modulo-card ${g.completadas === g.total ? 'done' : ''}" id="gen-${i}">
-        <div class="modulo-header">
-          <div class="info" onclick="toggleGenExpand(${i})" style="flex:1; cursor:pointer;">
-            <div class="nombre">${g.descripcion}</div>
-            <div class="modulo-id">${g.medida}</div>
-          </div>
-          <div class="cantidad-badge ${g.completadas === g.total ? 'completo' : ''}">${g.completadas}/${g.total}</div>
-          <div class="expand-arrow" id="arrow-gen-${i}" onclick="toggleGenExpand(${i})">▾</div>
+function renderGenericasLista(grupos) {
+  document.getElementById('genericasLista').innerHTML = grupos.map((g, i) => `
+    <div class="modulo-card ${g.completadas === g.total ? 'done' : ''}" id="gen-${i}">
+      <div class="modulo-header">
+        <div class="info" onclick="toggleGenExpand(${i})" style="flex:1; cursor:pointer;">
+          <div class="nombre">${g.descripcion}</div>
+          <div class="modulo-id">${g.medida}</div>
         </div>
-        <div class="piezas-sublist" id="sub-gen-${i}">
-          ${g.piezas.map(p => `
-            <div class="pieza-row">
-              <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza('${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
-              <div class="pieza-desc"><span class="pieza-clave">${p.claveUnica}</span> — ${p.ambiente}</div>
-              <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
-            </div>
-          `).join('')}
-        </div>
+        <div class="cantidad-badge ${g.completadas === g.total ? 'completo' : ''}">${g.completadas}/${g.total}</div>
+        <div class="expand-arrow" id="arrow-gen-${i}" onclick="toggleGenExpand(${i})">▾</div>
       </div>
-    `).join('');
-  } catch (err) {
-    mostrarMsg('msg', 'Error: ' + err.message, 'error');
-  }
+      <div class="piezas-sublist" id="sub-gen-${i}">
+        ${g.piezas.map(p => `
+          <div class="pieza-row">
+            <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza('${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
+            <div class="pieza-desc"><span class="pieza-clave">${p.claveUnica}</span></div>
+            <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 function toggleGenExpand(i) {
@@ -450,67 +495,48 @@ async function toggleGenericaPieza(claveUnica) {
     const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
-    cargarGenericas();
+    cargarModulosChecklist();
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
   }
 }
 
-// ============================================================================
-// PLACARES
-// ============================================================================
-
-function notaProcesoPlacar() {
-  if (estacionActual === 'Armado') return 'En Armado hay que tildar/escanear cada pieza individual del placar (control estricto).';
-  if (estacionActual === 'Logistica') return 'Un toque confirma todo el módulo por cantidad. Si falta algo, desplegá para ver el detalle.';
-  return 'Igual que un módulo de cocina — un toque confirma todo. Desplegable para ver el detalle.';
-}
-
-async function cargarPlacares() {
-  const obra = obraChecklistActual;
+function renderPlacaresLista(modulos) {
   document.getElementById('placarNote').textContent = notaProcesoPlacar();
-  document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  try {
-    const res = await llamarAPI('getModulosPlacar', { obra, proceso: estacionActual });
-    if (res.error) { document.getElementById('placaresLista').innerHTML = ''; return; }
-    if (!res.modulos.length) { document.getElementById('placaresLista').innerHTML = '<div class="scan-toggle-note">Ninguno para esta obra.</div>'; return; }
 
-    if (estacionActual === 'Armado') {
-      document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
-        <div class="modulo-card ${m.completado ? 'done' : ''}">
-          <div class="modulo-header">
-            <div class="modulo-info">
-              <div class="ambiente">${m.ambiente}</div>
-              <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
-            </div>
-            <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
-          </div>
-          <div class="piezas-sublist show" id="placar-armado-${i}">Cargando piezas...</div>
-        </div>
-      `).join('');
-      res.modulos.forEach((m, i) => cargarPiezasPlacarArmado(obra, m.ambiente, m.moduloId, i));
-      return;
-    }
-
-    document.getElementById('placaresLista').innerHTML = res.modulos.map((m, i) => `
-      <div class="modulo-card ${m.completado ? 'done' : ''}" id="placar-${i}">
+  if (estacionActual === 'Armado') {
+    document.getElementById('placaresLista').innerHTML = modulos.map((m, i) => `
+      <div class="modulo-card ${m.completado ? 'done' : ''}">
         <div class="modulo-header">
-          <div class="modulo-check" onclick="confirmarPlacarModulo(${i}, '${obra.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
-          <div class="modulo-info" onclick="togglePlacarExpand(${i})">
+          <div class="modulo-info">
             <div class="ambiente">${m.ambiente}</div>
             <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
           </div>
           <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
-          <div class="expand-arrow" id="arrow-placar-${i}" onclick="togglePlacarExpand(${i})">▾</div>
         </div>
-        <div class="piezas-sublist" id="sub-placar-${i}">
-          ${m.tipos.map(t => `<div class="tipo-row"><div class="nombre">${t.tipo}</div><div class="cant">${t.completadas}/${t.cantidad}</div></div>`).join('')}
-        </div>
+        <div class="piezas-sublist show" id="placar-armado-${i}">Cargando piezas...</div>
       </div>
     `).join('');
-  } catch (err) {
-    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    modulos.forEach((m, i) => cargarPiezasPlacarArmado(obraChecklistActual, m.ambiente, m.moduloId, i));
+    return;
   }
+
+  document.getElementById('placaresLista').innerHTML = modulos.map((m, i) => `
+    <div class="modulo-card ${m.completado ? 'done' : ''}" id="placar-${i}">
+      <div class="modulo-header">
+        <div class="modulo-check" onclick="confirmarPlacarModulo(${i}, '${obraChecklistActual.replace(/'/g,"\\'")}', '${m.ambiente.replace(/'/g,"\\'")}', '${m.moduloId}')">${m.completado ? '✓' : ''}</div>
+        <div class="modulo-info" onclick="togglePlacarExpand(${i})">
+          <div class="ambiente">${m.ambiente}</div>
+          <div class="nombre">ID módulo: ${m.moduloId} — Placar</div>
+        </div>
+        <div class="cantidad-badge ${m.completado ? 'completo' : ''}">${m.piezasCompletadas}/${m.totalPiezas}</div>
+        <div class="expand-arrow" id="arrow-placar-${i}" onclick="togglePlacarExpand(${i})">▾</div>
+      </div>
+      <div class="piezas-sublist" id="sub-placar-${i}">
+        ${m.tipos.map(t => `<div class="tipo-row"><div class="nombre">${t.tipo}</div><div class="cant">${t.completadas}/${t.cantidad}</div></div>`).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
@@ -534,7 +560,6 @@ async function togglePlacarPiezaArmado(claveUnica, obra, ambiente, moduloId, i) 
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
     cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
-    cargarPlacares();
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
   }
@@ -554,7 +579,6 @@ async function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
     const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
-    cargarPlacares();
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
   }
