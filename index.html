@@ -37,6 +37,11 @@
 
   #scanBox{display:none;}
   .section-divider{font-size:11px; font-weight:800; text-transform:uppercase; color:var(--ink-soft); border-top:1.5px solid var(--line); margin:16px 0 4px; padding-top:12px;}
+  .falt-grupo-title{font-size:10.5px; font-weight:800; color:var(--ink-soft); text-transform:uppercase; margin:10px 0 4px; padding-bottom:3px; border-bottom:1px solid var(--line);}
+  .falt-pieza{display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff; border:1.5px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;}
+  .falt-pieza.urgente{background:#FBE4E1; border-color:#D8503E;}
+  .falt-dias{font-size:9.5px; font-weight:800; padding:2px 7px; border-radius:20px; background:var(--bg); color:var(--ink-soft); white-space:nowrap;}
+  .falt-dias.urgente{background:#D8503E; color:#fff;}
   .scan-toggle-note{font-size:11.5px; color:var(--ink-soft); margin-bottom:10px;}
   .modulo-card{background:#fff; border:1.5px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
   .modulo-header{display:flex; align-items:center; gap:10px; padding:12px;}
@@ -112,6 +117,11 @@
   .panol-row button{padding:8px 12px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;}
 
   .field{margin-bottom:12px;}
+  .field.row2{display:flex; gap:8px;}
+  .field.row2 > div{flex:1;}
+  .btn-reportar-material{width:100%; background:var(--amber); color:#fff; border:none; border-radius:8px; padding:10px; font-size:12.5px; font-weight:800; cursor:pointer; margin:8px 0;}
+  .material-pendiente{display:flex; align-items:center; justify-content:space-between; gap:8px; background:#FDF1E0; border:1.5px solid var(--amber); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;}
+  .btn-resolver{background:var(--teal); color:#fff; border:none; border-radius:6px; padding:5px 9px; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap;}
   .field label{display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase;}
   .field input, .field select, .field textarea{
     width:100%; padding:11px; border:1.5px solid var(--line); border-radius:8px; font-size:14px; font-family:var(--font); background:#fff;
@@ -141,6 +151,25 @@
 </head>
 <body>
 
+<div id="loginOverlay" style="position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#fff; border-radius:14px; padding:24px 20px; width:100%; max-width:340px; box-shadow:0 4px 20px rgba(0,0,0,.15);">
+    <div style="text-align:center; margin-bottom:18px;">
+      <div style="font-weight:800; font-size:15px; color:var(--steel);">INDUSTRIA INTERIOR</div>
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">Sistema de Trazabilidad</div>
+    </div>
+    <div class="field">
+      <label>Tu nombre</label>
+      <input type="text" id="loginNombre" placeholder="Ej: Cristian" onkeydown="if(event.key==='Enter') document.getElementById('loginClave').focus()">
+    </div>
+    <div class="field">
+      <label>Clave</label>
+      <input type="password" id="loginClave" placeholder="••••" onkeydown="if(event.key==='Enter') hacerLogin()">
+    </div>
+    <button class="confirm-btn" onclick="hacerLogin()">Ingresar</button>
+    <div class="msg" id="msgLogin" style="margin-top:10px;"></div>
+  </div>
+</div>
+
 <div class="header">
   <h1>Sistema de Trazabilidad</h1>
   <div class="sub">Industria Interior</div>
@@ -151,12 +180,55 @@
   <div class="tabbtn" id="tabbtnPanol" onclick="mostrarTab('Panol')">PAÑOL</div>
   <div class="tabbtn" id="tabbtnRetrabajo" onclick="mostrarTab('Retrabajo')">RETRABAJO</div>
   <div class="tabbtn" id="tabbtnVistaGeneral" onclick="mostrarTab('VistaGeneral')">VISTA GRAL.</div>
+  <div class="tabbtn" id="tabbtnCompras" onclick="mostrarTab('Compras')">COMPRAS</div>
 </div>
 
 <div class="wrap">
 
   <div class="tabpanel show" id="tabEscaneo">
     <div class="estacion-grid" id="estacionGrid"></div>
+
+    <button class="confirm-btn" style="background:var(--steel); margin-bottom:14px;" onclick="togglePuertasPlacaBox()">🚪 Puertas Placa (cargar / ver)</button>
+    <div id="puertasPlacaBox" style="display:none; margin-bottom:14px;">
+      <div class="field">
+        <label>Obra</label>
+        <input type="text" id="ppObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+      </div>
+      <div class="field">
+        <label>Tipo</label>
+        <select id="ppTipo" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
+          <option value="Con marco a la vuelta">Con marco a la vuelta</option>
+          <option value="Con marco a la vuelta y tapajuntas">Con marco a la vuelta y tapajuntas</option>
+          <option value="Con marco vertical">Con marco vertical</option>
+        </select>
+      </div>
+      <div class="field row2">
+        <div><label>Material</label><input type="text" id="ppMaterial" placeholder="Ej: Blanco 18mm"></div>
+        <div><label>Cantidad</label><input type="number" id="ppCantidad" placeholder="Ej: 3"></div>
+      </div>
+      <button class="confirm-btn" onclick="enviarPuertaPlaca()">Cargar</button>
+      <div id="puertasPlacaLista" style="margin-top:12px;"></div>
+    </div>
+
+    <div id="faltantesBox" style="display:none;">
+      <div class="manual-entry" style="margin-bottom:6px;">
+        <input type="text" id="faltantesObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarFaltantes()">
+        <button onclick="cargarFaltantes()">Ver faltantes</button>
+      </div>
+      <div id="faltantesResumen" class="scan-toggle-note"></div>
+      <div id="materialPendienteLista"></div>
+      <button class="btn-reportar-material" onclick="toggleFormMaterial()">⚠ Reportar falta de material</button>
+      <div id="formMaterial" style="display:none;">
+        <div class="field"><label>Material</label><input type="text" id="matMaterial" placeholder="Ej: Placa Gris Arcilla 18mm"></div>
+        <div class="field row2">
+          <div><label>Cantidad faltante</label><input type="number" id="matCantidad" placeholder="Ej: 2"></div>
+          <div><label>Motivo</label><input type="text" id="matMotivo" placeholder="Ej: no llegó de fábrica"></div>
+        </div>
+        <button class="confirm-btn" onclick="enviarFaltaMaterial()">Reportar</button>
+      </div>
+      <div id="faltantesLista"></div>
+    </div>
+
     <div id="checklistBox" style="display:none;">
       <div class="manual-entry" style="margin-bottom:10px;">
         <input type="text" id="checklistObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
@@ -180,6 +252,37 @@
   </div>
 
   <div class="tabpanel" id="tabPanol">
+    <div class="section-divider" style="margin-top:0;">⚠ Faltantes de material (todas las obras)</div>
+    <div id="panolFaltantesResumen" class="scan-toggle-note"></div>
+    <div id="panolFaltantesLista"></div>
+
+    <div class="section-divider">🪟 Puertas de Vidrio y Espejo</div>
+    <div class="field">
+      <label>Obra</label>
+      <input type="text" id="pvObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+    </div>
+    <button class="btn-reportar-material" onclick="toggleFormPuertaVidrio()">+ Cargar puertas de vidrio/espejo</button>
+    <div id="formPuertaVidrio" style="display:none;">
+      <div class="field row2">
+        <div><label>Cantidad</label><input type="number" id="pvCantidad" placeholder="Ej: 4"></div>
+        <div><label>Medida (referencia)</label><input type="text" id="pvMedida" placeholder="Ej: 2450x900"></div>
+      </div>
+      <div class="field row2">
+        <div><label>Perfil / Color</label><input type="text" id="pvPerfilColor" placeholder="Ej: Negro mate"></div>
+        <div>
+          <label>Armado</label>
+          <select id="pvArmado" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
+            <option value="Fabrica">En fábrica</option>
+            <option value="Jorge">Tercerizado (Jorge)</option>
+          </select>
+        </div>
+      </div>
+      <button class="confirm-btn" onclick="enviarPuertaVidrio()">Cargar</button>
+    </div>
+    <button class="confirm-btn" style="margin-top:8px; background:var(--steel);" onclick="cargarPuertasVidrio()">Ver puertas de esta obra</button>
+    <div id="puertasVidrioLista" style="margin-top:10px;"></div>
+
+    <div class="section-divider">Materiales / Herrajes por pieza</div>
     <div class="field">
       <label>Obra</label>
       <input type="text" id="panolObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
@@ -208,8 +311,14 @@
           <option>Mal Canteado / Despegado</option>
           <option>Mal Cortado</option>
           <option>Rayado / Golpeado</option>
+          <option>Quedó corta / baja</option>
+          <option>Quedó grande / alta</option>
           <option>Otro motivo</option>
         </select>
+      </div>
+      <div class="field">
+        <label>Medida nueva (si hay que rehacer con otra medida)</label>
+        <input type="text" id="retMedidaNueva" placeholder="Ej: 18 x 620 x 380">
       </div>
       <div class="field">
         <label>Solicitado por (tu nombre)</label>
@@ -246,6 +355,13 @@
     <div class="msg" id="msgVG"></div>
   </div>
 
+  <div class="tabpanel" id="tabCompras">
+    <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">Todo lo que falta comprar/reponer, de todas las obras juntas — para planificar compras.</p>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarComprasGlobal()">Actualizar</button>
+    <div id="comprasResumen" class="scan-toggle-note" style="margin-top:10px;"></div>
+    <div id="comprasLista"></div>
+  </div>
+
 </div>
 
 <script>
@@ -271,11 +387,13 @@ async function llamarAPI(action, params) {
 }
 
 function mostrarTab(nombre) {
-  ["Escaneo", "Panol", "Retrabajo", "VistaGeneral"].forEach(t => {
+  ["Escaneo", "Panol", "Retrabajo", "VistaGeneral", "Compras"].forEach(t => {
     document.getElementById('tab' + t).classList.toggle('show', t === nombre);
     document.getElementById('tabbtn' + t).classList.toggle('active', t === nombre);
   });
   if (nombre !== 'Escaneo') { detenerCamara(); }
+  if (nombre === 'Compras') { cargarComprasGlobal(); }
+  if (nombre === 'Panol') { cargarPanolFaltantes(); }
 }
 
 const grid = document.getElementById('estacionGrid');
@@ -309,6 +427,12 @@ function seleccionarEstacion(proceso, btnEl) {
   ocultarMsg('msg');
   document.getElementById('pieceCard').classList.remove('show');
 
+  document.getElementById('faltantesBox').style.display = 'block';
+  document.getElementById('faltantesLista').innerHTML = '';
+  document.getElementById('faltantesResumen').textContent = '';
+  const obraFaltantesGuardada = document.getElementById('faltantesObra').value.trim();
+  if (obraFaltantesGuardada) cargarFaltantes();
+
   const esChecklist = PROCESOS_CON_CHECKLIST.indexOf(proceso) !== -1;
   document.getElementById('checklistBox').style.display = esChecklist ? 'block' : 'none';
   if (esChecklist) {
@@ -316,6 +440,104 @@ function seleccionarEstacion(proceso, btnEl) {
     if (obraGuardada) cargarModulosChecklist();
   }
 }
+
+async function cargarFaltantes() {
+  const obra = document.getElementById('faltantesObra').value.trim();
+  if (!obra) return;
+  document.getElementById('faltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPiezasFaltantes', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('faltantesLista').innerHTML = ''; document.getElementById('faltantesResumen').textContent = res.error; return; }
+    renderFaltantes(res);
+  } catch (err) {
+    document.getElementById('faltantesResumen').textContent = 'Error: ' + err.message;
+  }
+  cargarMaterialPendiente();
+}
+
+function renderFaltantes(res) {
+  if (res.total === 0) {
+    document.getElementById('faltantesResumen').textContent = `✓ No faltan piezas de ${estacionActual} en esta obra.`;
+    document.getElementById('faltantesLista').innerHTML = '';
+    return;
+  }
+  document.getElementById('faltantesResumen').textContent = `⚠ ${res.total} pieza(s) sin pasar por ${estacionActual} todavía:`;
+
+  let ambienteActual = null;
+  let html = '';
+  res.piezas.forEach(p => {
+    if (p.ambiente !== ambienteActual) {
+      ambienteActual = p.ambiente;
+      html += `<div class="falt-grupo-title">${ambienteActual}</div>`;
+    }
+    const urgente = p.diasEnEstacion !== null && p.diasEnEstacion >= 3;
+    const dias = p.diasEnEstacion === null ? '' : `<span class="falt-dias ${urgente ? 'urgente' : ''}">${p.diasEnEstacion}d</span>`;
+    html += `
+      <div class="falt-pieza ${urgente ? 'urgente' : ''}">
+        <span>${p.descripcion || p.claveUnica}${p.moduloId ? ' — ID ' + p.moduloId : ''}</span>
+        ${dias}
+      </div>`;
+  });
+  document.getElementById('faltantesLista').innerHTML = html;
+}
+
+// ============================================================================
+// FALTANTES DE MATERIAL -- reportar y ver pendientes de esta obra+estacion
+// ============================================================================
+
+function toggleFormMaterial() {
+  const form = document.getElementById('formMaterial');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarFaltaMaterial() {
+  if (!puedeEditar()) return;
+  const obra = document.getElementById('faltantesObra').value.trim();
+  const material = document.getElementById('matMaterial').value.trim();
+  const cantidad = document.getElementById('matCantidad').value.trim();
+  const motivo = document.getElementById('matMotivo').value.trim();
+  if (!obra || !material || !cantidad) { mostrarMsg('msg', 'Completá obra, material y cantidad.', 'warn'); return; }
+  try {
+    const res = await llamarAPI('reportarFaltaMaterial', { obra, estacion: estacionActual, material, cantidad, motivo, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    document.getElementById('matMaterial').value = '';
+    document.getElementById('matCantidad').value = '';
+    document.getElementById('matMotivo').value = '';
+    document.getElementById('formMaterial').style.display = 'none';
+    cargarMaterialPendiente();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarMaterialPendiente() {
+  const obra = document.getElementById('faltantesObra').value.trim();
+  if (!obra) return;
+  try {
+    const res = await llamarAPI('getFaltantesMaterial', { obra });
+    if (res.error || !res.items.length) { document.getElementById('materialPendienteLista').innerHTML = ''; return; }
+    document.getElementById('materialPendienteLista').innerHTML = res.items
+      .filter(it => it.estacion === estacionActual)
+      .map(it => `
+        <div class="material-pendiente">
+          <span>⚠ Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}</span>
+          <button class="btn-resolver" onclick="resolverMaterial(${it.fila})">Ya llegó</button>
+        </div>
+      `).join('');
+  } catch (err) { /* silencioso */ }
+}
+
+async function resolverMaterial(fila) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarMaterialPendiente();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
 
 let obraChecklistActual = '';
 let chkModulos = [];
@@ -425,18 +647,20 @@ function renderModulosLista(modulos) {
 }
 
 async function toggleModulo(i, obra, ambiente, moduloId) {
+  if (!puedeEditar()) return;
   const el = document.getElementById('modulo-' + i);
-  if (el.classList.contains('done')) return;
-  el.classList.add('done');
-  el.querySelector('.modulo-check').textContent = '✓';
+  const yaHecho = el.classList.contains('done');
+  const estadoDestino = yaHecho ? 'Pendiente' : 'Completado';
+  el.classList.toggle('done');
+  el.querySelector('.modulo-check').textContent = yaHecho ? '' : '✓';
   try {
-    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
-    if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.remove('done'); el.querySelector('.modulo-check').textContent = ''; return; }
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual, estadoDestino, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; return; }
     mostrarMsg('msg', res.mensaje, 'ok');
   } catch (err) {
     mostrarMsg('msg', 'Error: ' + err.message, 'error');
-    el.classList.remove('done');
-    el.querySelector('.modulo-check').textContent = '';
+    el.classList.toggle('done');
+    el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : '';
   }
 }
 
@@ -486,7 +710,7 @@ function renderGenericasLista(grupos) {
       <div class="piezas-sublist" id="sub-gen-${i}">
         ${g.piezas.map(p => `
           <div class="pieza-row">
-            <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza('${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
+            <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="toggleGenericaPieza(this, '${p.claveUnica}')">${p.estado === 'Completado' ? '✓' : ''}</div>
             <div class="pieza-desc"><span class="pieza-clave">${p.claveUnica}</span></div>
             <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
           </div>
@@ -501,9 +725,11 @@ function toggleGenExpand(i) {
   document.getElementById('arrow-gen-' + i).classList.toggle('open');
 }
 
-async function toggleGenericaPieza(claveUnica) {
+async function toggleGenericaPieza(el, claveUnica) {
+  if (!puedeEditar()) return;
+  const yaHecho = el.classList.contains('done');
   try {
-    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    const res = await llamarAPI(yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo', { clave: claveUnica, proceso: estacionActual, usuario: usuarioActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
     cargarModulosChecklist();
@@ -557,7 +783,7 @@ async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
     if (!el || res.error) return;
     el.innerHTML = res.piezas.map(p => `
       <div class="pieza-row">
-        <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado('${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
+        <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado(this, '${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
         <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
         <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
       </div>
@@ -565,9 +791,11 @@ async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
   } catch (err) { /* silencioso */ }
 }
 
-async function togglePlacarPiezaArmado(claveUnica, obra, ambiente, moduloId, i) {
+async function togglePlacarPiezaArmado(el, claveUnica, obra, ambiente, moduloId, i) {
+  if (!puedeEditar()) return;
+  const yaHecho = el.classList.contains('done');
   try {
-    const res = await llamarAPI('confirmarEscaneo', { clave: claveUnica, proceso: estacionActual });
+    const res = await llamarAPI(yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo', { clave: claveUnica, proceso: estacionActual, usuario: usuarioActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
     cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
@@ -582,12 +810,14 @@ function togglePlacarExpand(i) {
 }
 
 async function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
+  if (!puedeEditar()) return;
   const el = document.getElementById('placar-' + i);
-  if (el.classList.contains('done')) return;
-  el.classList.add('done');
-  el.querySelector('.modulo-check').textContent = '✓';
+  const yaHecho = el.classList.contains('done');
+  const estadoDestino = yaHecho ? 'Pendiente' : 'Completado';
+  el.classList.toggle('done');
+  el.querySelector('.modulo-check').textContent = yaHecho ? '' : '✓';
   try {
-    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual });
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual, estadoDestino, usuario: usuarioActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, 'ok');
   } catch (err) {
@@ -681,11 +911,16 @@ function mostrarPieza(res) {
 }
 
 async function confirmar() {
+  if (!puedeEditar()) return;
   if (!piezaActual || !estacionActual) return;
   try {
-    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual });
+    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual, usuario: usuarioActual });
     if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
     mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
+    if (res.piezasModuloConfirmadas > 0 && PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) {
+      const obraGuardada = document.getElementById('checklistObra').value.trim();
+      if (obraGuardada) cargarModulosChecklist();
+    }
     setTimeout(() => {
       document.getElementById('pieceCard').classList.remove('show');
       iniciarCamara();
@@ -720,9 +955,10 @@ async function cargarPanol() {
 }
 
 async function confirmarPanol(fila) {
+  if (!puedeEditar()) return;
   const val = document.getElementById('panolEnt_' + fila).value;
   try {
-    await llamarAPI('confirmarPanolItem', { fila: fila, cantidad: val });
+    await llamarAPI('confirmarPanolItem', { fila: fila, cantidad: val, usuario: usuarioActual });
     mostrarMsg('msgPanol', 'Guardado correctamente', 'ok');
   } catch (err) {
     mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
@@ -757,6 +993,7 @@ async function buscarPiezaRetrabajo() {
 }
 
 async function enviarRetrabajo() {
+  if (!puedeEditar()) return;
   if (!piezaActualRetrabajo) return;
   const solicitante = document.getElementById('retSolicitante').value.trim();
   if (!solicitante) { mostrarMsg('msgRetrabajo', 'Completá quién lo solicita', 'warn'); return; }
@@ -769,13 +1006,15 @@ async function enviarRetrabajo() {
     solicitadoPor: solicitante,
     rol: document.getElementById('retRol').value,
     observaciones: document.getElementById('retObs').value,
+    medidaNueva: document.getElementById('retMedidaNueva').value.trim(),
   };
 
   try {
-    const res = await llamarAPI('generarRetrabajo', { datos: JSON.stringify(datos) });
+    const res = await llamarAPI('generarRetrabajo', { datos: JSON.stringify(datos), usuario: usuarioActual });
     if (res.error) { mostrarMsg('msgRetrabajo', res.error, 'error'); return; }
     const extra = res.requiereAprobacion ? ' — queda pendiente de aprobación del Encargado General.' : '';
     mostrarMsg('msgRetrabajo', 'Pedido ' + res.idPedido + ' generado.' + extra, 'ok');
+    document.getElementById('retMedidaNueva').value = '';
     document.getElementById('formRetrabajo').style.display = 'none';
     document.getElementById('pieceCardRetrabajo').classList.remove('show');
     document.getElementById('retrabajoInput').value = '';
@@ -886,6 +1125,258 @@ function mostrarMsg(id, texto, tipo) {
 }
 function ocultarMsg(id) {
   document.getElementById(id).className = 'msg';
+}
+
+// ============================================================================
+// LOGIN
+// ============================================================================
+
+let usuarioActual = '';
+let rolActual = '';
+
+async function hacerLogin() {
+  const nombre = document.getElementById('loginNombre').value.trim();
+  const clave = document.getElementById('loginClave').value.trim();
+  if (!nombre) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = 'Ingresá tu nombre'; return; }
+  try {
+    const res = await llamarAPI('validarLogin', { nombre, clave });
+    if (res.error) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = res.error; return; }
+    usuarioActual = res.nombre;
+    rolActual = res.rol;
+    document.getElementById('loginOverlay').style.display = 'none';
+    if (rolActual === 'viewer') mostrarMsg('msg', '👁 Estás en modo solo lectura.', 'warn');
+  } catch (err) {
+    document.getElementById('msgLogin').className = 'msg show error';
+    document.getElementById('msgLogin').textContent = 'Error: ' + err.message;
+  }
+}
+
+function puedeEditar() {
+  if (rolActual === 'viewer') {
+    mostrarMsg('msg', '👁 Estás en modo solo lectura — no se puede editar.', 'warn');
+    return false;
+  }
+  return true;
+}
+
+// ============================================================================
+// PUERTAS PLACA
+// ============================================================================
+
+function togglePuertasPlacaBox() {
+  const box = document.getElementById('puertasPlacaBox');
+  const abriendo = box.style.display === 'none';
+  box.style.display = abriendo ? 'block' : 'none';
+  if (abriendo) cargarPuertasPlaca();
+}
+
+async function enviarPuertaPlaca() {
+  if (!puedeEditar()) return;
+  const obra = document.getElementById('ppObra').value.trim();
+  const tipo = document.getElementById('ppTipo').value;
+  const material = document.getElementById('ppMaterial').value.trim();
+  const cantidad = document.getElementById('ppCantidad').value.trim();
+  if (!obra || !material || !cantidad) { mostrarMsg('msg', 'Completá obra, material y cantidad.', 'warn'); return; }
+  try {
+    const res = await llamarAPI('agregarPuertaPlaca', { obra, tipo, material, cantidad, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    document.getElementById('ppMaterial').value = '';
+    document.getElementById('ppCantidad').value = '';
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPuertasPlaca() {
+  const obra = document.getElementById('ppObra').value.trim();
+  if (!obra) return;
+  document.getElementById('puertasPlacaLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPuertasPlaca', { obra });
+    if (res.error || !res.items.length) { document.getElementById('puertasPlacaLista').innerHTML = '<div class="scan-toggle-note">Ninguna cargada para esta obra.</div>'; return; }
+    const puedeConfirmar = estacionActual === 'Logistica' || estacionActual === 'Instalacion';
+    document.getElementById('puertasPlacaLista').innerHTML = res.items.map(it => {
+      const yaHecho = puedeConfirmar && (estacionActual === 'Logistica' ? it.estadoLogistica : it.estadoInstalacion) === 'Completado';
+      const botonConfirmar = puedeConfirmar
+        ? `<button class="btn-resolver" style="margin-top:6px;" onclick="togglePuertaPlacaProceso(${it.fila}, '${yaHecho}')">${yaHecho ? '✓ ' + estacionActual + ' — tocar para destildar' : 'Confirmar ' + estacionActual}</button>`
+        : '';
+      return `
+      <div class="modulo-card ${it.lista === 'Si' ? 'done' : ''}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="togglePuertaPlacaLista(${it.fila}, '${it.lista}')">${it.lista === 'Si' ? '✓' : ''}</div>
+          <div class="modulo-info">
+            <div class="ambiente">${it.tipo}</div>
+            <div class="nombre">${it.cantidad} — ${it.material}</div>
+            <div class="modulo-id">Logística: ${it.estadoLogistica} · Instalación: ${it.estadoInstalacion}</div>
+            ${botonConfirmar}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('puertasPlacaLista').innerHTML = 'Error: ' + err.message;
+  }
+}
+
+async function togglePuertaPlacaLista(fila, listaActual) {
+  if (!puedeEditar()) return;
+  const nuevaLista = listaActual !== 'Si';
+  try {
+    await llamarAPI('marcarPuertaPlacaLista', { fila, lista: nuevaLista, usuario: usuarioActual });
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function togglePuertaPlacaProceso(fila, yaHechoStr) {
+  if (!puedeEditar()) return;
+  const yaHecho = yaHechoStr === 'true';
+  try {
+    await llamarAPI('confirmarPuertaPlacaProceso', { fila, proceso: estacionActual, estadoDestino: yaHecho ? 'Pendiente' : 'Completado', usuario: usuarioActual });
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PESTAÑA COMPRAS -- vista global de solo lectura
+// ============================================================================
+
+async function cargarComprasGlobal() {
+  document.getElementById('comprasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getFaltantesMaterialGlobal', {});
+    if (res.error) { document.getElementById('comprasResumen').textContent = res.error; document.getElementById('comprasLista').innerHTML = ''; return; }
+    if (!res.total) {
+      document.getElementById('comprasResumen').textContent = '✓ No hay faltantes de material pendientes en ninguna obra.';
+      document.getElementById('comprasLista').innerHTML = '';
+      return;
+    }
+    document.getElementById('comprasResumen').textContent = `⚠ ${res.total} faltante(s) pendiente(s), de más antiguo a más nuevo:`;
+    document.getElementById('comprasLista').innerHTML = res.items.map(it => `
+      <div class="material-pendiente">
+        <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
+        <button class="btn-resolver" onclick="resolverMaterialGlobal(${it.fila})">Ya llegó</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('comprasResumen').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function resolverMaterialGlobal(fila) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarComprasGlobal();
+  } catch (err) {
+    mostrarMsg('msgVG', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PAÑOL -- Faltantes globales + Puertas de Vidrio/Espejo
+// ============================================================================
+
+async function cargarPanolFaltantes() {
+  document.getElementById('panolFaltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getFaltantesMaterialGlobal', {});
+    if (res.error) { document.getElementById('panolFaltantesResumen').textContent = res.error; return; }
+    if (!res.total) {
+      document.getElementById('panolFaltantesResumen').textContent = '✓ No hay faltantes de material pendientes.';
+      document.getElementById('panolFaltantesLista').innerHTML = '';
+      return;
+    }
+    document.getElementById('panolFaltantesResumen').textContent = `${res.total} faltante(s) pendiente(s) para gestionar con compras:`;
+    document.getElementById('panolFaltantesLista').innerHTML = res.items.map(it => `
+      <div class="material-pendiente">
+        <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
+        <button class="btn-resolver" onclick="resolverMaterialPanol(${it.fila})">Ya llegó</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('panolFaltantesResumen').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function resolverMaterialPanol(fila) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarPanolFaltantes();
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+function toggleFormPuertaVidrio() {
+  const form = document.getElementById('formPuertaVidrio');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarPuertaVidrio() {
+  if (!puedeEditar()) return;
+  const obra = document.getElementById('pvObra').value.trim();
+  const cantidad = document.getElementById('pvCantidad').value.trim();
+  const medida = document.getElementById('pvMedida').value.trim();
+  const perfilColor = document.getElementById('pvPerfilColor').value.trim();
+  const armado = document.getElementById('pvArmado').value;
+  if (!obra || !cantidad) { mostrarMsg('msgPanol', 'Completá obra y cantidad.', 'warn'); return; }
+  try {
+    const res = await llamarAPI('agregarPuertaVidrio', { obra, cantidad, medida, perfilColor, armado, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); return; }
+    mostrarMsg('msgPanol', res.mensaje, 'ok');
+    document.getElementById('pvCantidad').value = '';
+    document.getElementById('pvMedida').value = '';
+    document.getElementById('pvPerfilColor').value = '';
+    document.getElementById('formPuertaVidrio').style.display = 'none';
+    cargarPuertasVidrio();
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPuertasVidrio() {
+  const obra = document.getElementById('pvObra').value.trim();
+  if (!obra) return;
+  document.getElementById('puertasVidrioLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getPuertasVidrio', { obra });
+    if (res.error || !res.items.length) { document.getElementById('puertasVidrioLista').innerHTML = '<div class="scan-toggle-note">Ninguna cargada para esta obra.</div>'; return; }
+    document.getElementById('puertasVidrioLista').innerHTML = res.items.map(it => `
+      <div class="modulo-card">
+        <div class="modulo-header">
+          <div class="modulo-info">
+            <div class="ambiente">${it.armado === 'Jorge' ? 'TERCERIZADO (JORGE)' : 'ARMADO EN FÁBRICA'}</div>
+            <div class="nombre">${it.cantidad} puerta(s) — ${it.medida || 'sin medida cargada'}</div>
+            <div class="modulo-id">${it.perfilColor || ''}</div>
+          </div>
+          <select onchange="cambiarEstadoPuertaVidrio(${it.fila}, this.value)" style="font-size:11px; padding:4px; border-radius:6px; border:1.5px solid var(--line);">
+            <option value="Pendiente" ${it.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="Pedido" ${it.estado === 'Pedido' ? 'selected' : ''}>Pedido</option>
+            <option value="En fabrica" ${it.estado === 'En fabrica' ? 'selected' : ''}>Ya en fábrica</option>
+          </select>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('puertasVidrioLista').innerHTML = 'Error: ' + err.message;
+  }
+}
+
+async function cambiarEstadoPuertaVidrio(fila, estado) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('actualizarEstadoPuertaVidrio', { fila, estado, usuario: usuarioActual });
+    mostrarMsg('msgPanol', 'Estado actualizado', 'ok');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
 }
 </script>
 <datalist id="obrasDatalist"></datalist>
