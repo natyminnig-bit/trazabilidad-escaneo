@@ -194,6 +194,17 @@
     </div>
 
     <div id="scanBox">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--ink-soft); cursor:pointer;">
+          <input type="checkbox" id="modoRafagaCheck" onchange="toggleModoRafaga()" style="width:16px; height:16px;">
+          ⚡ Modo ráfaga (escanear varias seguidas, sin confirmar una por una)
+        </label>
+      </div>
+      <div id="rafagaResumen" style="display:none; background:var(--teal-bg); border:1.5px solid var(--teal); border-radius:8px; padding:10px; margin-bottom:8px; font-size:13px;">
+        <b><span id="rafagaContador">0</span> piezas escaneadas</b> en este lote
+        <div id="rafagaLista" style="font-size:11px; color:var(--ink-soft); margin-top:4px; max-height:100px; overflow-y:auto;"></div>
+        <button class="btn-resolver" style="margin-top:6px;" onclick="finalizarRafaga()">Finalizar lote</button>
+      </div>
       <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
       <video id="video" playsinline></video>
       <canvas id="canvas"></canvas>
@@ -885,6 +896,22 @@ async function procesarClave(codigo) {
     return;
   }
 
+  if (modoRafaga) {
+    try {
+      const res = await llamarAPI('confirmarEscaneo', { clave: codigo, proceso: estacionActual, usuario: usuarioActual });
+      if (res.error) { mostrarMsg('msg', codigo + ': ' + res.error, 'error'); iniciarCamara(); return; }
+      rafagaCount++;
+      rafagaItems.unshift(codigo + (res.duplicado ? ' (ya estaba)' : ''));
+      document.getElementById('rafagaContador').textContent = rafagaCount;
+      document.getElementById('rafagaLista').innerHTML = rafagaItems.slice(0, 8).map(c => `• ${c}`).join('<br>');
+      iniciarCamara();
+    } catch (err) {
+      mostrarMsg('msg', 'Error: ' + err.message, 'error');
+      iniciarCamara();
+    }
+    return;
+  }
+
   document.getElementById('pieceCard').innerHTML = '<div class="loading">Buscando pieza...</div>';
   document.getElementById('pieceCard').classList.add('show');
   try {
@@ -893,6 +920,27 @@ async function procesarClave(codigo) {
   } catch (err) {
     mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error');
   }
+}
+
+let modoRafaga = false;
+let rafagaCount = 0;
+let rafagaItems = [];
+
+function toggleModoRafaga() {
+  modoRafaga = document.getElementById('modoRafagaCheck').checked;
+  document.getElementById('rafagaResumen').style.display = modoRafaga ? 'block' : 'none';
+  if (modoRafaga) {
+    rafagaCount = 0;
+    rafagaItems = [];
+    document.getElementById('rafagaContador').textContent = '0';
+    document.getElementById('rafagaLista').innerHTML = '';
+  }
+}
+
+function finalizarRafaga() {
+  mostrarMsg('msg', `Lote finalizado: ${rafagaCount} pieza(s) escaneada(s). Corroborá contra la hoja de etiquetas.`, 'ok');
+  document.getElementById('modoRafagaCheck').checked = false;
+  toggleModoRafaga();
 }
 
 function mostrarPieza(res) {
