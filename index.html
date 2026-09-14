@@ -841,12 +841,14 @@ function iniciarCamara() {
   const hints = new Map();
   hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
   zxingReader = new ZXing.BrowserQRCodeReader(hints);
+  let yaProcesado = false; // evita procesar el mismo QR varias veces mientras la camara termina de detenerse
 
   zxingReader.decodeFromConstraints(
     { video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } },
     video,
     (result, err) => {
-      if (result && result.getText()) {
+      if (result && result.getText() && !yaProcesado) {
+        yaProcesado = true;
         detenerCamara();
         procesarClave(result.getText());
       }
