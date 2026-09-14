@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-<base target="_top">
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escaneo — Sistema de Trazabilidad</title>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <style>
   :root{
@@ -35,7 +36,6 @@
   .vg-crumb b{color:var(--ink);}
 
   #scanBox{display:none;}
-  #scanBox.show{display:block;}
   .section-divider{font-size:11px; font-weight:800; text-transform:uppercase; color:var(--ink-soft); border-top:1.5px solid var(--line); margin:16px 0 4px; padding-top:12px;}
   .falt-grupo-title{font-size:10.5px; font-weight:800; color:var(--ink-soft); text-transform:uppercase; margin:10px 0 4px; padding-bottom:3px; border-bottom:1px solid var(--line);}
   .falt-pieza{display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff; border:1.5px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px;}
@@ -73,6 +73,7 @@
   .tipo-row .cant{color:var(--ink-soft); font-size:11px;}
   .pieza-check-mini{width:20px; height:20px; border-radius:5px; border:2px solid var(--ink-soft); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; cursor:pointer;}
   .pieza-check-mini.done{background:var(--teal); border-color:var(--teal);}
+  #scanBox.show{display:block;}
   #video{width:100%; border-radius:12px; background:#000; max-height:280px; object-fit:cover;}
   #canvas{display:none;}
 
@@ -144,6 +145,8 @@
   .vg-dots{display:flex; gap:3px;}
   .vg-dot{width:9px; height:9px; border-radius:50%; background:var(--line);}
   .vg-dot.done{background:var(--teal);}
+
+  .cam-note{font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:6px;}
 </style>
 </head>
 <body>
@@ -156,11 +159,7 @@
     </div>
     <div class="field">
       <label>Tu nombre</label>
-      <input type="text" id="loginNombre" placeholder="Ej: Cristian" onkeydown="if(event.key==='Enter') document.getElementById('loginClave').focus()">
-    </div>
-    <div class="field">
-      <label>Clave</label>
-      <input type="password" id="loginClave" placeholder="••••" onkeydown="if(event.key==='Enter') hacerLogin()">
+      <input type="text" id="loginNombre" placeholder="Ej: Cristian" onkeydown="if(event.key==='Enter') hacerLogin()">
     </div>
     <button class="confirm-btn" onclick="hacerLogin()">Ingresar</button>
     <div class="msg" id="msgLogin" style="margin-top:10px;"></div>
@@ -185,29 +184,29 @@
   <div class="tabpanel show" id="tabEscaneo">
     <div class="estacion-grid" id="estacionGrid"></div>
 
-    <button class="confirm-btn" style="background:var(--steel); margin-bottom:14px;" onclick="togglePuertasPlacaBox()">🚪 Puertas Placa (cargar / ver)</button>
-    <div id="puertasPlacaBox" style="display:none; margin-bottom:14px;">
-      <div class="field">
-        <label>Obra</label>
-        <input type="text" id="ppObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+    <div id="checklistBox" style="display:none;">
+      <div class="manual-entry" style="margin-bottom:10px;">
+        <input type="text" id="checklistObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
+        <button onclick="cargarModulosChecklist()">Cargar</button>
       </div>
-      <div class="field">
-        <label>Tipo</label>
-        <select id="ppTipo" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
-          <option value="Con marco a la vuelta">Con marco a la vuelta</option>
-          <option value="Con marco a la vuelta y tapajuntas">Con marco a la vuelta y tapajuntas</option>
-          <option value="Con marco vertical">Con marco vertical</option>
-        </select>
-      </div>
-      <div class="field row2">
-        <div><label>Material</label><input type="text" id="ppMaterial" placeholder="Ej: Blanco 18mm"></div>
-        <div><label>Cantidad</label><input type="number" id="ppCantidad" placeholder="Ej: 3"></div>
-      </div>
-      <button class="confirm-btn" onclick="enviarPuertaPlaca()">Cargar</button>
-      <div id="puertasPlacaLista" style="margin-top:12px;"></div>
+      <div id="checklistNav"></div>
     </div>
 
-    <div id="faltantesBox" style="display:none;">
+    <div id="scanBox">
+      <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div class="cam-note" id="camNote"></div>
+      <div class="manual-entry">
+        <input type="text" id="manualInput" placeholder="O escribí / escaneá la Clave Única" onkeydown="if(event.key==='Enter') buscarManual()" autofocus>
+        <button onclick="buscarManual()">Buscar</button>
+      </div>
+    </div>
+    <div class="piece-card" id="pieceCard"></div>
+    <div class="msg" id="msg"></div>
+
+    <div id="faltantesBox" style="display:none; margin-top:16px;">
+      <div class="section-divider" style="margin-top:0;">⚠ Piezas faltantes</div>
       <div class="manual-entry" style="margin-bottom:6px;">
         <input type="text" id="faltantesObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarFaltantes()">
         <button onclick="cargarFaltantes()">Ver faltantes</button>
@@ -226,38 +225,48 @@
       <div id="faltantesLista"></div>
     </div>
 
-    <div id="checklistBox" style="display:none;">
-      <div class="manual-entry" style="margin-bottom:10px;">
-        <input type="text" id="checklistObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
-        <button onclick="cargarModulosChecklist()">Cargar</button>
-      </div>
-      <div id="checklistNav"></div>
+    <div id="puertasPlacaSeccion" style="display:none;">
+      <div class="section-divider">🚪 Puertas Placa</div>
+      <div id="puertasPlacaLista" style="margin-bottom:8px;"></div>
     </div>
-
-    <div id="scanBox">
-      <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
-      <video id="video" playsinline></video>
-      <canvas id="canvas"></canvas>
-      <div class="manual-entry">
-        <input type="text" id="manualInput" placeholder="O escribí / escaneá la Clave Única" onkeydown="if(event.key==='Enter') buscarManual()" autofocus>
-        <button onclick="buscarManual()">Buscar</button>
-      </div>
+    <div id="puertasPlacaAgregarLink" style="text-align:center; margin:10px 0;">
+      <a href="#" onclick="togglePuertasPlacaForm(); return false;" style="font-size:11.5px; color:var(--steel); font-weight:700;">+ Agregar puerta placa</a>
     </div>
-    <div class="piece-card" id="pieceCard"></div>
-    <div class="msg" id="msg"></div>
+    <div id="formPuertaPlaca" style="display:none; margin-bottom:14px;">
+      <div class="field">
+        <label>Tipo</label>
+        <select id="ppTipo" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
+          <option value="Con marco a la vuelta">Con marco a la vuelta</option>
+          <option value="Con marco a la vuelta y tapajuntas">Con marco a la vuelta y tapajuntas</option>
+          <option value="Con marco vertical">Con marco vertical</option>
+        </select>
+      </div>
+      <div class="field row2">
+        <div><label>Material</label><input type="text" id="ppMaterial" placeholder="Ej: Blanco 18mm"></div>
+        <div><label>Cantidad</label><input type="number" id="ppCantidad" placeholder="Ej: 3"></div>
+      </div>
+      <button class="confirm-btn" onclick="enviarPuertaPlaca()">Cargar</button>
+    </div>
   </div>
 
   <div class="tabpanel" id="tabPanol">
+    <div class="field" style="margin-top:0;">
+      <label>Obra</label>
+      <input type="text" id="panolObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" onkeydown="if(event.key==='Enter') cargarPanol()">
+    </div>
+    <button class="confirm-btn" style="margin-top:0;" onclick="cargarPanol()">Cargar obra</button>
+
     <div class="section-divider" style="margin-top:0;">⚠ Faltantes de material (todas las obras)</div>
     <div id="panolFaltantesResumen" class="scan-toggle-note"></div>
     <div id="panolFaltantesLista"></div>
 
-    <div class="section-divider">🪟 Puertas de Vidrio y Espejo</div>
-    <div class="field">
-      <label>Obra</label>
-      <input type="text" id="pvObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
+    <div id="puertasVidrioSeccion" style="display:none;">
+      <div class="section-divider">🪟 Puertas de Vidrio y Espejo</div>
+      <div id="puertasVidrioLista" style="margin-bottom:8px;"></div>
     </div>
-    <button class="btn-reportar-material" onclick="toggleFormPuertaVidrio()">+ Cargar puertas de vidrio/espejo</button>
+    <div style="text-align:center; margin:10px 0;">
+      <a href="#" onclick="toggleFormPuertaVidrio(); return false;" style="font-size:11.5px; color:var(--steel); font-weight:700;">+ Agregar puerta de vidrio/espejo</a>
+    </div>
     <div id="formPuertaVidrio" style="display:none;">
       <div class="field row2">
         <div><label>Cantidad</label><input type="number" id="pvCantidad" placeholder="Ej: 4"></div>
@@ -275,15 +284,8 @@
       </div>
       <button class="confirm-btn" onclick="enviarPuertaVidrio()">Cargar</button>
     </div>
-    <button class="confirm-btn" style="margin-top:8px; background:var(--steel);" onclick="cargarPuertasVidrio()">Ver puertas de esta obra</button>
-    <div id="puertasVidrioLista" style="margin-top:10px;"></div>
 
     <div class="section-divider">Materiales / Herrajes por pieza</div>
-    <div class="field">
-      <label>Obra</label>
-      <input type="text" id="panolObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
-    </div>
-    <button class="confirm-btn" style="margin-top:0;" onclick="cargarPanol()">Cargar lista de Pañol</button>
     <div id="panolLista" style="margin-top:16px;"></div>
     <div class="msg" id="msgPanol"></div>
   </div>
@@ -361,34 +363,10 @@
 </div>
 
 <script>
-let usuarioActual = '';
-let rolActual = '';
-
-function hacerLogin() {
-  const nombre = document.getElementById('loginNombre').value.trim();
-  const clave = document.getElementById('loginClave').value.trim();
-  if (!nombre) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = 'Ingresá tu nombre'; return; }
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = res.error; return; }
-      usuarioActual = res.nombre;
-      rolActual = res.rol;
-      document.getElementById('loginOverlay').style.display = 'none';
-      if (rolActual === 'viewer') {
-        mostrarMsg('msg', '👁 Estás en modo solo lectura.', 'warn');
-      }
-    })
-    .withFailureHandler(err => { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = 'Error: ' + err.message; })
-    .validarLogin(nombre, clave);
-}
-
-function puedeEditar() {
-  if (rolActual === 'viewer') {
-    mostrarMsg('msg', '👁 Estás en modo solo lectura — no se puede editar.', 'warn');
-    return false;
-  }
-  return true;
-}
+// ============================================================
+// CONFIGURACION -- pegar acá la URL de tu Apps Script (/exec)
+// ============================================================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3S8eZwB3WNZOi0fDrS4bPIaU3fgRcal2tGjdnHMSvKh9rSVz2DQhy-EoNZmolZinX/exec";
 
 const PROCESOS = ["Corte", "Pegado", "Mecanizado", "Armado", "Logistica", "Instalacion"];
 let estacionActual = null;
@@ -396,6 +374,15 @@ let piezaActual = null;
 let piezaActualRetrabajo = null;
 let scanning = false;
 let zxingReader = null;
+
+async function llamarAPI(action, params) {
+  params = params || {};
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('action', action);
+  Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
+  const resp = await fetch(url.toString());
+  return await resp.json();
+}
 
 function mostrarTab(nombre) {
   ["Escaneo", "Panol", "Retrabajo", "VistaGeneral", "Compras"].forEach(t => {
@@ -417,16 +404,15 @@ PROCESOS.forEach(p => {
 });
 
 // Autocompletado de Obra -- se llena solo con las obras reales que ya
-// existen en el Sheet, para no depender de tipear el nombre de memoria
-// (evita los problemas de nombres con typos que tuvimos en esta obra)
-google.script.run
-  .withSuccessHandler(res => {
+// existen en el Sheet, para no depender de tipear el nombre de memoria.
+(async () => {
+  try {
+    const res = await llamarAPI('getObrasDisponibles', {});
     if (res.error) return;
     const datalist = document.getElementById('obrasDatalist');
     datalist.innerHTML = res.obras.map(o => `<option value="${o.replace(/"/g,'&quot;')}">`).join('');
-  })
-  .withFailureHandler(() => {})
-  .getObrasDisponibles();
+  } catch (err) { /* silencioso */ }
+})();
 
 const PROCESOS_CON_CHECKLIST = ["Armado", "Logistica", "Instalacion"];
 
@@ -453,18 +439,20 @@ function seleccionarEstacion(proceso, btnEl) {
   }
 }
 
-function cargarFaltantes() {
+async function cargarFaltantes() {
   const obra = document.getElementById('faltantesObra').value.trim();
   if (!obra) return;
+  obraChecklistActual = obra;
   document.getElementById('faltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { document.getElementById('faltantesLista').innerHTML = ''; document.getElementById('faltantesResumen').textContent = res.error; return; }
-      renderFaltantes(res);
-    })
-    .withFailureHandler(err => { document.getElementById('faltantesResumen').textContent = 'Error: ' + err.message; })
-    .getPiezasFaltantes(obra, estacionActual);
+  try {
+    const res = await llamarAPI('getPiezasFaltantes', { obra, proceso: estacionActual });
+    if (res.error) { document.getElementById('faltantesLista').innerHTML = ''; document.getElementById('faltantesResumen').textContent = res.error; return; }
+    renderFaltantes(res);
+  } catch (err) {
+    document.getElementById('faltantesResumen').textContent = 'Error: ' + err.message;
+  }
   cargarMaterialPendiente();
+  cargarPuertasPlaca();
 }
 
 function renderFaltantes(res) {
@@ -502,264 +490,52 @@ function toggleFormMaterial() {
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
 }
 
-function enviarFaltaMaterial() {
+async function enviarFaltaMaterial() {
   if (!puedeEditar()) return;
   const obra = document.getElementById('faltantesObra').value.trim();
   const material = document.getElementById('matMaterial').value.trim();
   const cantidad = document.getElementById('matCantidad').value.trim();
   const motivo = document.getElementById('matMotivo').value.trim();
   if (!obra || !material || !cantidad) { mostrarMsg('msg', 'Completá obra, material y cantidad.', 'warn'); return; }
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-      document.getElementById('matMaterial').value = '';
-      document.getElementById('matCantidad').value = '';
-      document.getElementById('matMotivo').value = '';
-      document.getElementById('formMaterial').style.display = 'none';
-      cargarMaterialPendiente();
-    })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .reportarFaltaMaterial(obra, estacionActual, material, cantidad, motivo);
+  try {
+    const res = await llamarAPI('reportarFaltaMaterial', { obra, estacion: estacionActual, material, cantidad, motivo, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    document.getElementById('matMaterial').value = '';
+    document.getElementById('matCantidad').value = '';
+    document.getElementById('matMotivo').value = '';
+    document.getElementById('formMaterial').style.display = 'none';
+    cargarMaterialPendiente();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
-function cargarMaterialPendiente() {
+async function cargarMaterialPendiente() {
   const obra = document.getElementById('faltantesObra').value.trim();
   if (!obra) return;
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error || !res.items.length) { document.getElementById('materialPendienteLista').innerHTML = ''; return; }
-      document.getElementById('materialPendienteLista').innerHTML = res.items
-        .filter(it => it.estacion === estacionActual)
-        .map(it => `
-          <div class="material-pendiente">
-            <span>⚠ Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}</span>
-            <button class="btn-resolver" onclick="resolverMaterial(${it.fila})">Ya llegó</button>
-          </div>
-        `).join('');
-    })
-    .withFailureHandler(() => {})
-    .getFaltantesMaterial(obra);
-}
-
-function resolverMaterial(fila) {
-  if (!puedeEditar()) return;
-  google.script.run
-    .withSuccessHandler(() => { cargarMaterialPendiente(); })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .resolverFaltaMaterial(fila);
-}
-
-// ============================================================================
-// PESTAÑA COMPRAS -- vista global de faltantes de material, todas las obras
-// ============================================================================
-
-function cargarComprasGlobal() {
-  document.getElementById('comprasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { document.getElementById('comprasResumen').textContent = res.error; document.getElementById('comprasLista').innerHTML = ''; return; }
-      if (!res.total) {
-        document.getElementById('comprasResumen').textContent = '✓ No hay faltantes de material pendientes en ninguna obra.';
-        document.getElementById('comprasLista').innerHTML = '';
-        return;
-      }
-      document.getElementById('comprasResumen').textContent = `⚠ ${res.total} faltante(s) pendiente(s), de más antiguo a más nuevo:`;
-      document.getElementById('comprasLista').innerHTML = res.items.map(it => `
+  try {
+    const res = await llamarAPI('getFaltantesMaterial', { obra });
+    if (res.error || !res.items.length) { document.getElementById('materialPendienteLista').innerHTML = ''; return; }
+    document.getElementById('materialPendienteLista').innerHTML = res.items
+      .filter(it => it.estacion === estacionActual)
+      .map(it => `
         <div class="material-pendiente">
-          <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
-          <button class="btn-resolver" onclick="resolverMaterialGlobal(${it.fila})">Ya llegó</button>
+          <span>⚠ Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}</span>
+          <button class="btn-resolver" onclick="resolverMaterial(${it.fila})">Ya llegó</button>
         </div>
       `).join('');
-    })
-    .withFailureHandler(err => { document.getElementById('comprasResumen').textContent = 'Error: ' + err.message; })
-    .getFaltantesMaterialGlobal();
+  } catch (err) { /* silencioso */ }
 }
 
-function resolverMaterialGlobal(fila) {
+async function resolverMaterial(fila) {
   if (!puedeEditar()) return;
-  google.script.run
-    .withSuccessHandler(() => { cargarComprasGlobal(); })
-    .withFailureHandler(err => mostrarMsg('msgVG', 'Error: ' + err.message, 'error'))
-    .resolverFaltaMaterial(fila);
-}
-
-// ============================================================================
-// PAÑOL -- Faltantes de material (vista global, gestion del pañolero) y
-// Puertas de Vidrio/Espejo (carga del pañolero, medida solo de referencia)
-// ============================================================================
-
-function cargarPanolFaltantes() {
-  document.getElementById('panolFaltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { document.getElementById('panolFaltantesResumen').textContent = res.error; return; }
-      if (!res.total) {
-        document.getElementById('panolFaltantesResumen').textContent = '✓ No hay faltantes de material pendientes.';
-        document.getElementById('panolFaltantesLista').innerHTML = '';
-        return;
-      }
-      document.getElementById('panolFaltantesResumen').textContent = `${res.total} faltante(s) pendiente(s) para gestionar con compras:`;
-      document.getElementById('panolFaltantesLista').innerHTML = res.items.map(it => `
-        <div class="material-pendiente">
-          <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
-          <button class="btn-resolver" onclick="resolverMaterialPanol(${it.fila})">Ya llegó</button>
-        </div>
-      `).join('');
-    })
-    .withFailureHandler(err => { document.getElementById('panolFaltantesResumen').textContent = 'Error: ' + err.message; })
-    .getFaltantesMaterialGlobal();
-}
-
-function resolverMaterialPanol(fila) {
-  if (!puedeEditar()) return;
-  google.script.run
-    .withSuccessHandler(() => cargarPanolFaltantes())
-    .withFailureHandler(err => mostrarMsg('msgPanol', 'Error: ' + err.message, 'error'))
-    .resolverFaltaMaterial(fila);
-}
-
-function toggleFormPuertaVidrio() {
-  const form = document.getElementById('formPuertaVidrio');
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
-}
-
-function enviarPuertaVidrio() {
-  if (!puedeEditar()) return;
-  const obra = document.getElementById('pvObra').value.trim();
-  const cantidad = document.getElementById('pvCantidad').value.trim();
-  const medida = document.getElementById('pvMedida').value.trim();
-  const perfilColor = document.getElementById('pvPerfilColor').value.trim();
-  const armado = document.getElementById('pvArmado').value;
-  if (!obra || !cantidad) { mostrarMsg('msgPanol', 'Completá obra y cantidad.', 'warn'); return; }
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); return; }
-      mostrarMsg('msgPanol', res.mensaje, 'ok');
-      document.getElementById('pvCantidad').value = '';
-      document.getElementById('pvMedida').value = '';
-      document.getElementById('pvPerfilColor').value = '';
-      document.getElementById('formPuertaVidrio').style.display = 'none';
-      cargarPuertasVidrio();
-    })
-    .withFailureHandler(err => mostrarMsg('msgPanol', 'Error: ' + err.message, 'error'))
-    .agregarPuertaVidrio(obra, cantidad, medida, perfilColor, armado);
-}
-
-function cargarPuertasVidrio() {
-  const obra = document.getElementById('pvObra').value.trim();
-  if (!obra) return;
-  document.getElementById('puertasVidrioLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error || !res.items.length) { document.getElementById('puertasVidrioLista').innerHTML = ''; return; }
-      document.getElementById('puertasVidrioLista').innerHTML = res.items.map(it => `
-        <div class="modulo-card">
-          <div class="modulo-header">
-            <div class="modulo-info">
-              <div class="ambiente">${it.armado === 'Jorge' ? 'TERCERIZADO (JORGE)' : 'ARMADO EN FÁBRICA'}</div>
-              <div class="nombre">${it.cantidad} puerta(s) — ${it.medida || 'sin medida cargada'}</div>
-              <div class="modulo-id">${it.perfilColor || ''}</div>
-            </div>
-            <select onchange="cambiarEstadoPuertaVidrio(${it.fila}, this.value)" style="font-size:11px; padding:4px; border-radius:6px; border:1.5px solid var(--line);">
-              <option value="Pendiente" ${it.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-              <option value="Pedido" ${it.estado === 'Pedido' ? 'selected' : ''}>Pedido</option>
-              <option value="En fabrica" ${it.estado === 'En fabrica' ? 'selected' : ''}>Ya en fábrica</option>
-            </select>
-          </div>
-        </div>
-      `).join('');
-    })
-    .withFailureHandler(err => { document.getElementById('puertasVidrioLista').innerHTML = 'Error: ' + err.message; })
-    .getPuertasVidrio(obra);
-}
-
-function cambiarEstadoPuertaVidrio(fila, estado) {
-  if (!puedeEditar()) return;
-  google.script.run
-    .withSuccessHandler(() => mostrarMsg('msgPanol', 'Estado actualizado', 'ok'))
-    .withFailureHandler(err => mostrarMsg('msgPanol', 'Error: ' + err.message, 'error'))
-    .actualizarEstadoPuertaVidrio(fila, estado);
-}
-
-// ============================================================================
-// PUERTAS PLACA -- carga de tecnica (sin medida), seguimiento por
-// Logistica/Instalacion para que no se pierdan en el camino.
-// ============================================================================
-
-function togglePuertasPlacaBox() {
-  const box = document.getElementById('puertasPlacaBox');
-  const abriendo = box.style.display === 'none';
-  box.style.display = abriendo ? 'block' : 'none';
-  if (abriendo) cargarPuertasPlaca();
-}
-
-function enviarPuertaPlaca() {
-  if (!puedeEditar()) return;
-  const obra = document.getElementById('ppObra').value.trim();
-  const tipo = document.getElementById('ppTipo').value;
-  const material = document.getElementById('ppMaterial').value.trim();
-  const cantidad = document.getElementById('ppCantidad').value.trim();
-  if (!obra || !material || !cantidad) { mostrarMsg('msg', 'Completá obra, material y cantidad.', 'warn'); return; }
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-      document.getElementById('ppMaterial').value = '';
-      document.getElementById('ppCantidad').value = '';
-      cargarPuertasPlaca();
-    })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .agregarPuertaPlaca(obra, tipo, material, cantidad);
-}
-
-function cargarPuertasPlaca() {
-  const obra = document.getElementById('ppObra').value.trim();
-  if (!obra) return;
-  document.getElementById('puertasPlacaLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error || !res.items.length) { document.getElementById('puertasPlacaLista').innerHTML = ''; return; }
-      const puedeConfirmar = estacionActual === 'Logistica' || estacionActual === 'Instalacion';
-      document.getElementById('puertasPlacaLista').innerHTML = res.items.map(it => {
-        const yaHecho = puedeConfirmar && (estacionActual === 'Logistica' ? it.estadoLogistica : it.estadoInstalacion) === 'Completado';
-        const botonConfirmar = puedeConfirmar
-          ? `<button class="btn-resolver" style="margin-top:6px;" onclick="togglePuertaPlacaProceso(${it.fila}, '${yaHecho}')">${yaHecho ? '✓ ' + estacionActual + ' — tocar para destildar' : 'Confirmar ' + estacionActual}</button>`
-          : '';
-        return `
-        <div class="modulo-card ${it.lista === 'Si' ? 'done' : ''}">
-          <div class="modulo-header">
-            <div class="modulo-check" onclick="togglePuertaPlacaLista(${it.fila}, '${it.lista}')">${it.lista === 'Si' ? '✓' : ''}</div>
-            <div class="modulo-info">
-              <div class="ambiente">${it.tipo}</div>
-              <div class="nombre">${it.cantidad} — ${it.material}</div>
-              <div class="modulo-id">Logística: ${it.estadoLogistica} · Instalación: ${it.estadoInstalacion}</div>
-              ${botonConfirmar}
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-    })
-    .withFailureHandler(err => { document.getElementById('puertasPlacaLista').innerHTML = 'Error: ' + err.message; })
-    .getPuertasPlaca(obra);
-}
-
-function togglePuertaPlacaProceso(fila, yaHechoStr) {
-  if (!puedeEditar()) return;
-  const yaHecho = yaHechoStr === 'true';
-  google.script.run
-    .withSuccessHandler(() => cargarPuertasPlaca())
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .confirmarPuertaPlacaProceso(fila, estacionActual, yaHecho ? 'Pendiente' : 'Completado');
-}
-
-function togglePuertaPlacaLista(fila, listaActual) {
-  if (!puedeEditar()) return;
-  const nuevaLista = listaActual === 'Si' ? false : true;
-  google.script.run
-    .withSuccessHandler(() => cargarPuertasPlaca())
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .marcarPuertaPlacaLista(fila, nuevaLista);
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarMaterialPendiente();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
 
@@ -767,35 +543,31 @@ let obraChecklistActual = '';
 let chkModulos = [];
 let chkGenericas = [];
 let chkPlacares = [];
-let chkCargasPendientes = 0;
-let chkNivel = 'ambientes'; // 'ambientes' | 'detalle'
+let chkNivel = 'ambientes';
 let chkAmbienteSel = null;
 
-function cargarModulosChecklist() {
+async function cargarModulosChecklist() {
   const obra = document.getElementById('checklistObra').value.trim();
   if (!obra) return;
   obraChecklistActual = obra;
   chkNivel = 'ambientes';
   chkAmbienteSel = null;
   document.getElementById('checklistNav').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  cargarPuertasPlaca();
 
-  chkCargasPendientes = 3;
-  const onDone = () => { chkCargasPendientes--; if (chkCargasPendientes === 0) renderChecklistNav(); };
-
-  google.script.run
-    .withSuccessHandler(res => { chkModulos = res.error ? [] : res.modulos; onDone(); })
-    .withFailureHandler(() => { chkModulos = []; onDone(); })
-    .getModulosPorProceso(obra, estacionActual);
-
-  google.script.run
-    .withSuccessHandler(res => { chkGenericas = res.error ? [] : res.grupos; onDone(); })
-    .withFailureHandler(() => { chkGenericas = []; onDone(); })
-    .getPiezasSueltasAgrupadas(obra, estacionActual);
-
-  google.script.run
-    .withSuccessHandler(res => { chkPlacares = res.error ? [] : res.modulos; onDone(); })
-    .withFailureHandler(() => { chkPlacares = []; onDone(); })
-    .getModulosPlacar(obra, estacionActual);
+  try {
+    const [rMod, rGen, rPla] = await Promise.all([
+      llamarAPI('getModulosPorProceso', { obra, proceso: estacionActual }),
+      llamarAPI('getPiezasSueltasAgrupadas', { obra, proceso: estacionActual }),
+      llamarAPI('getModulosPlacar', { obra, proceso: estacionActual }),
+    ]);
+    chkModulos = rMod.error ? [] : rMod.modulos;
+    chkGenericas = rGen.error ? [] : rGen.grupos;
+    chkPlacares = rPla.error ? [] : rPla.modulos;
+    renderChecklistNav();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
 function chkAmbientesDisponibles() {
@@ -875,23 +647,25 @@ function renderModulosLista(modulos) {
   `).join('');
 }
 
-function toggleModulo(i, obra, ambiente, moduloId) {
+async function toggleModulo(i, obra, ambiente, moduloId) {
   if (!puedeEditar()) return;
   const el = document.getElementById('modulo-' + i);
   const yaHecho = el.classList.contains('done');
   const estadoDestino = yaHecho ? 'Pendiente' : 'Completado';
   el.classList.toggle('done');
   el.querySelector('.modulo-check').textContent = yaHecho ? '' : '✓';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-    })
-    .withFailureHandler(err => { mostrarMsg('msg', 'Error: ' + err.message, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; })
-    .confirmarModuloProceso(obra, ambiente, moduloId, estacionActual, estadoDestino);
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual, estadoDestino, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    el.classList.toggle('done');
+    el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : '';
+  }
 }
 
-function toggleExpand(i, obra, ambiente, moduloId) {
+async function toggleExpand(i, obra, ambiente, moduloId) {
   const sub = document.getElementById('piezas-' + i);
   const arrow = document.getElementById('arrow-' + i);
   const abriendo = !sub.classList.contains('show');
@@ -899,20 +673,20 @@ function toggleExpand(i, obra, ambiente, moduloId) {
   arrow.classList.toggle('open');
   if (abriendo && !sub.dataset.cargado) {
     sub.innerHTML = '<div class="pieza-row">Cargando piezas...</div>';
-    google.script.run
-      .withSuccessHandler(res => {
-        if (res.error) { sub.innerHTML = '<div class="pieza-row">' + res.error + '</div>'; return; }
-        sub.dataset.cargado = '1';
-        sub.innerHTML = res.piezas.map(p => `
-          <div class="pieza-row">
-            <div class="pieza-estado ${p.estado === 'Completado' ? 'completado' : 'pendiente'}"></div>
-            <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
-            <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">🔧 Rehacer</button>
-          </div>
-        `).join('');
-      })
-      .withFailureHandler(err => { sub.innerHTML = '<div class="pieza-row">Error: ' + err.message + '</div>'; })
-      .getPiezasDeModulo(obra, ambiente, moduloId, estacionActual);
+    try {
+      const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+      if (res.error) { sub.innerHTML = '<div class="pieza-row">' + res.error + '</div>'; return; }
+      sub.dataset.cargado = '1';
+      sub.innerHTML = res.piezas.map(p => `
+        <div class="pieza-row">
+          <div class="pieza-estado ${p.estado === 'Completado' ? 'completado' : 'pendiente'}"></div>
+          <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+          <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">🔧 Rehacer</button>
+        </div>
+      `).join('');
+    } catch (err) {
+      sub.innerHTML = '<div class="pieza-row">Error: ' + err.message + '</div>';
+    }
   }
 }
 
@@ -952,18 +726,17 @@ function toggleGenExpand(i) {
   document.getElementById('arrow-gen-' + i).classList.toggle('open');
 }
 
-function toggleGenericaPieza(el, claveUnica) {
+async function toggleGenericaPieza(el, claveUnica) {
   if (!puedeEditar()) return;
   const yaHecho = el.classList.contains('done');
-  const fn = yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-      cargarModulosChecklist();
-    })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    [fn](claveUnica, estacionActual);
+  try {
+    const res = await llamarAPI(yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo', { clave: claveUnica, proceso: estacionActual, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarModulosChecklist();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
 function renderPlacaresLista(modulos) {
@@ -1004,35 +777,32 @@ function renderPlacaresLista(modulos) {
   `).join('');
 }
 
-function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
-  google.script.run
-    .withSuccessHandler(res => {
-      const el = document.getElementById('placar-armado-' + i);
-      if (!el || res.error) return;
-      el.innerHTML = res.piezas.map(p => `
-        <div class="pieza-row">
-          <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado(this, '${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
-          <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
-          <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
-        </div>
-      `).join('');
-    })
-    .withFailureHandler(() => {})
-    .getPiezasDeModulo(obra, ambiente, moduloId, estacionActual);
+async function cargarPiezasPlacarArmado(obra, ambiente, moduloId, i) {
+  try {
+    const res = await llamarAPI('getPiezasDeModulo', { obra, ambiente, moduloId, proceso: estacionActual });
+    const el = document.getElementById('placar-armado-' + i);
+    if (!el || res.error) return;
+    el.innerHTML = res.piezas.map(p => `
+      <div class="pieza-row">
+        <div class="pieza-check-mini ${p.estado === 'Completado' ? 'done' : ''}" onclick="togglePlacarPiezaArmado(this, '${p.claveUnica}', '${obra.replace(/'/g,"\\'")}', '${ambiente.replace(/'/g,"\\'")}', '${moduloId}', ${i})">${p.estado === 'Completado' ? '✓' : ''}</div>
+        <div class="pieza-desc">${p.descripcion}<br><span class="pieza-clave">${p.claveUnica}</span></div>
+        <button class="btn-rehacer" onclick="rehacerPieza('${p.claveUnica}')">📷</button>
+      </div>
+    `).join('');
+  } catch (err) { /* silencioso */ }
 }
 
-function togglePlacarPiezaArmado(el, claveUnica, obra, ambiente, moduloId, i) {
+async function togglePlacarPiezaArmado(el, claveUnica, obra, ambiente, moduloId, i) {
   if (!puedeEditar()) return;
   const yaHecho = el.classList.contains('done');
-  const fn = yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-      cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
-    })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    [fn](claveUnica, estacionActual);
+  try {
+    const res = await llamarAPI(yaHecho ? 'desconfirmarPieza' : 'confirmarEscaneo', { clave: claveUnica, proceso: estacionActual, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    cargarPiezasPlacarArmado(obra, ambiente, moduloId, i);
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
 function togglePlacarExpand(i) {
@@ -1040,21 +810,22 @@ function togglePlacarExpand(i) {
   document.getElementById('arrow-placar-' + i).classList.toggle('open');
 }
 
-function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
+async function confirmarPlacarModulo(i, obra, ambiente, moduloId) {
   if (!puedeEditar()) return;
   const el = document.getElementById('placar-' + i);
   const yaHecho = el.classList.contains('done');
   const estadoDestino = yaHecho ? 'Pendiente' : 'Completado';
   el.classList.toggle('done');
   el.querySelector('.modulo-check').textContent = yaHecho ? '' : '✓';
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; return; }
-      mostrarMsg('msg', res.mensaje, 'ok');
-    })
-    .withFailureHandler(err => { mostrarMsg('msg', 'Error: ' + err.message, 'error'); el.classList.toggle('done'); el.querySelector('.modulo-check').textContent = yaHecho ? '✓' : ''; })
-    .confirmarModuloProceso(obra, ambiente, moduloId, estacionActual, estadoDestino);
+  try {
+    const res = await llamarAPI('confirmarModuloProceso', { obra, ambiente, moduloId, proceso: estacionActual, estadoDestino, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
+
 
 function detenerCamara() {
   scanning = false;
@@ -1076,13 +847,13 @@ function iniciarCamara() {
         detenerCamara();
         procesarClave(result.getText());
       }
-      // "err" se dispara constantemente cuando NO hay QR en cuadro todavia -- es normal, se ignora.
     }
   ).then(() => {
     scanning = true;
+    document.getElementById('camNote').textContent = '';
     document.getElementById('btnIniciarCamara').style.display = 'none';
   }).catch(err => {
-    mostrarMsg('msg', 'No se pudo abrir la cámara (' + err.message + ') — usá el campo de texto para escribir la Clave Única a mano.', 'warn');
+    document.getElementById('camNote').textContent = 'Cámara no disponible (' + err.message + ') — usá el campo de texto.';
   });
 }
 
@@ -1091,33 +862,32 @@ function buscarManual() {
   if (val) procesarClave(val);
 }
 
-function procesarClave(codigo) {
+async function procesarClave(codigo) {
   ocultarMsg('msg');
 
-  // QR de cabecera del Plano de Corte (formato: "PLANO:Obra:Material:Cantidad")
-  // -- no es una pieza, suma directo al Control de Placas, sin pasar por buscarPieza
   if (codigo.indexOf('PLANO:') === 0) {
     document.getElementById('pieceCard').innerHTML = '<div class="loading">Registrando plano de corte...</div>';
     document.getElementById('pieceCard').classList.add('show');
-    google.script.run
-      .withSuccessHandler(res => {
-        document.getElementById('pieceCard').classList.remove('show');
-        if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-        mostrarMsg('msg', res.mensaje, 'ok');
-        setTimeout(() => { iniciarCamara(); }, 1400);
-      })
-      .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-      .registrarPlacaEscaneada(codigo);
+    try {
+      const res = await llamarAPI('registrarPlacaEscaneada', { codigo });
+      document.getElementById('pieceCard').classList.remove('show');
+      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+      mostrarMsg('msg', res.mensaje, 'ok');
+      setTimeout(() => { iniciarCamara(); }, 1400);
+    } catch (err) {
+      mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    }
     return;
   }
 
   document.getElementById('pieceCard').innerHTML = '<div class="loading">Buscando pieza...</div>';
   document.getElementById('pieceCard').classList.add('show');
-
-  google.script.run
-    .withSuccessHandler(mostrarPieza)
-    .withFailureHandler(err => mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error'))
-    .buscarPieza(codigo);
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: codigo });
+    mostrarPieza(res);
+  } catch (err) {
+    mostrarMsg('msg', 'Error buscando la pieza: ' + err.message, 'error');
+  }
 }
 
 function mostrarPieza(res) {
@@ -1141,93 +911,90 @@ function mostrarPieza(res) {
   `;
 }
 
-function confirmar() {
+async function confirmar() {
   if (!puedeEditar()) return;
   if (!piezaActual || !estacionActual) return;
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-      mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
-      google.script.run.registrarAccion(usuarioActual, 'Escaneo ' + estacionActual, piezaActual.claveUnica);
-      // Si la pieza escaneada pertenecia a un modulo y se confirmo en cascada,
-      // refrescamos el checklist visible para que se vea el modulo tildado
-      // sin tener que buscarlo a mano en la lista.
-      if (res.piezasModuloConfirmadas > 0 && PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) {
-        const obraGuardada = document.getElementById('checklistObra').value.trim();
-        if (obraGuardada) cargarModulosChecklist();
-      }
-      setTimeout(() => {
-        document.getElementById('pieceCard').classList.remove('show');
-        iniciarCamara();
-      }, 1400);
-    })
-    .withFailureHandler(err => mostrarMsg('msg', 'Error: ' + err.message, 'error'))
-    .confirmarEscaneo(piezaActual.claveUnica, estacionActual);
+  try {
+    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
+    if (res.piezasModuloConfirmadas > 0 && PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) {
+      const obraGuardada = document.getElementById('checklistObra').value.trim();
+      if (obraGuardada) cargarModulosChecklist();
+    }
+    setTimeout(() => {
+      document.getElementById('pieceCard').classList.remove('show');
+      iniciarCamara();
+    }, 1400);
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
 }
 
-function cargarPanol() {
+async function cargarPanol() {
   const obra = document.getElementById('panolObra').value.trim();
   if (!obra) { mostrarMsg('msgPanol', 'Completá la obra', 'warn'); return; }
   ocultarMsg('msgPanol');
   document.getElementById('panolLista').innerHTML = '<div class="loading">Cargando...</div>';
-
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); document.getElementById('panolLista').innerHTML=''; return; }
-      if (!res.items.length) { document.getElementById('panolLista').innerHTML = '<div class="loading">No hay ítems de Pañol cargados para esta obra.</div>'; return; }
-      document.getElementById('panolLista').innerHTML = res.items.map(it => `
-        <div class="panol-item">
-          <div class="nombre">${it.descripcion}</div>
-          <div class="panol-row">
-            <span>Requerido: <b>${it.requerido} ${it.unidad || ''}</b></span>
-            <input type="text" id="panolEnt_${it.fila}" value="${it.entregado || ''}" placeholder="Entregado">
-            <button onclick="confirmarPanol(${it.fila})">Guardar</button>
-          </div>
+  cargarPuertasVidrio();
+  try {
+    const res = await llamarAPI('getPanolItems', { obra });
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); document.getElementById('panolLista').innerHTML=''; return; }
+    if (!res.items.length) { document.getElementById('panolLista').innerHTML = '<div class="loading">No hay ítems de Pañol cargados para esta obra.</div>'; return; }
+    document.getElementById('panolLista').innerHTML = res.items.map(it => `
+      <div class="panol-item">
+        <div class="nombre">${it.descripcion}</div>
+        <div class="panol-row">
+          <span>Requerido: <b>${it.requerido} ${it.unidad || ''}</b></span>
+          <input type="text" id="panolEnt_${it.fila}" value="${it.entregado || ''}" placeholder="Entregado">
+          <button onclick="confirmarPanol(${it.fila})">Guardar</button>
         </div>
-      `).join('');
-    })
-    .withFailureHandler(err => mostrarMsg('msgPanol', 'Error: ' + err.message, 'error'))
-    .getPanolItems(obra);
+      </div>
+    `).join('');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
 }
 
-function confirmarPanol(fila) {
+async function confirmarPanol(fila) {
   if (!puedeEditar()) return;
   const val = document.getElementById('panolEnt_' + fila).value;
-  google.script.run
-    .withSuccessHandler(() => mostrarMsg('msgPanol', 'Guardado correctamente', 'ok'))
-    .withFailureHandler(err => mostrarMsg('msgPanol', 'Error: ' + err.message, 'error'))
-    .confirmarPanolItem(fila, val);
+  try {
+    await llamarAPI('confirmarPanolItem', { fila: fila, cantidad: val, usuario: usuarioActual });
+    mostrarMsg('msgPanol', 'Guardado correctamente', 'ok');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
 }
 
-function buscarPiezaRetrabajo() {
+async function buscarPiezaRetrabajo() {
   const val = document.getElementById('retrabajoInput').value.trim();
   if (!val) return;
   ocultarMsg('msgRetrabajo');
   document.getElementById('pieceCardRetrabajo').innerHTML = '<div class="loading">Buscando pieza...</div>';
   document.getElementById('pieceCardRetrabajo').classList.add('show');
   document.getElementById('formRetrabajo').style.display = 'none';
-
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) {
-        mostrarMsg('msgRetrabajo', res.error, 'error');
-        document.getElementById('pieceCardRetrabajo').classList.remove('show');
-        return;
-      }
-      piezaActualRetrabajo = res;
-      document.getElementById('pieceCardRetrabajo').innerHTML = `
-        <div class="piece-name">${res.pieza}</div>
-        <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
-        <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
-        <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
-      `;
-      document.getElementById('formRetrabajo').style.display = 'block';
-    })
-    .withFailureHandler(err => mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error'))
-    .buscarPieza(val);
+  try {
+    const res = await llamarAPI('buscarPieza', { clave: val });
+    if (res.error) {
+      mostrarMsg('msgRetrabajo', res.error, 'error');
+      document.getElementById('pieceCardRetrabajo').classList.remove('show');
+      return;
+    }
+    piezaActualRetrabajo = res;
+    document.getElementById('pieceCardRetrabajo').innerHTML = `
+      <div class="piece-name">${res.pieza}</div>
+      <div class="piece-meta">${res.claveUnica} · Mód. ${res.grupo || res.correlativo}</div>
+      <div class="piece-field"><b>Ambiente</b><span>${res.ambiente}</span></div>
+      <div class="piece-field"><b>Material</b><span>${res.material}</span></div>
+    `;
+    document.getElementById('formRetrabajo').style.display = 'block';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
 }
 
-function enviarRetrabajo() {
+async function enviarRetrabajo() {
   if (!puedeEditar()) return;
   if (!piezaActualRetrabajo) return;
   const solicitante = document.getElementById('retSolicitante').value.trim();
@@ -1244,44 +1011,42 @@ function enviarRetrabajo() {
     medidaNueva: document.getElementById('retMedidaNueva').value.trim(),
   };
 
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msgRetrabajo', res.error, 'error'); return; }
-      const extra = res.requiereAprobacion ? ' — queda pendiente de aprobación del Encargado General.' : '';
-      mostrarMsg('msgRetrabajo', 'Pedido ' + res.idPedido + ' generado.' + extra, 'ok');
-      google.script.run.registrarAccion(usuarioActual, 'Retrabajo', res.idPedido + ' — ' + piezaActualRetrabajo.claveUnica + ' — ' + document.getElementById('retMotivo').value);
-      document.getElementById('formRetrabajo').style.display = 'none';
-      document.getElementById('pieceCardRetrabajo').classList.remove('show');
-      document.getElementById('retrabajoInput').value = '';
-      document.getElementById('retObs').value = '';
-      document.getElementById('retMedidaNueva').value = '';
-    })
-    .withFailureHandler(err => mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error'))
-    .generarRetrabajo(datos);
+  try {
+    const res = await llamarAPI('generarRetrabajo', { datos: JSON.stringify(datos), usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msgRetrabajo', res.error, 'error'); return; }
+    const extra = res.requiereAprobacion ? ' — queda pendiente de aprobación del Encargado General.' : '';
+    mostrarMsg('msgRetrabajo', 'Pedido ' + res.idPedido + ' generado.' + extra, 'ok');
+    document.getElementById('retMedidaNueva').value = '';
+    document.getElementById('formRetrabajo').style.display = 'none';
+    document.getElementById('pieceCardRetrabajo').classList.remove('show');
+    document.getElementById('retrabajoInput').value = '';
+    document.getElementById('retObs').value = '';
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
 }
 
 let vgData = null;
-let vgNivel = 'ambientes'; // 'ambientes' | 'grupos' | 'piezas'
+let vgNivel = 'ambientes';
 let vgAmbienteSel = null;
-let vgGrupoSel = null; // { tipo: 'modulo'|'placar'|'generica', obj: {...} }
+let vgGrupoSel = null;
 
-function cargarVistaGeneral() {
+async function cargarVistaGeneral() {
   const obra = document.getElementById('vgObra').value.trim();
   if (!obra) { mostrarMsg('msgVG', 'Completá la obra', 'warn'); return; }
   ocultarMsg('msgVG');
   document.getElementById('vgContent').innerHTML = '<div class="loading">Cargando...</div>';
-
-  google.script.run
-    .withSuccessHandler(res => {
-      if (res.error) { mostrarMsg('msgVG', res.error, 'error'); document.getElementById('vgContent').innerHTML=''; return; }
-      vgData = res;
-      vgNivel = 'ambientes';
-      vgAmbienteSel = null;
-      vgGrupoSel = null;
-      renderVistaGeneral();
-    })
-    .withFailureHandler(err => mostrarMsg('msgVG', 'Error: ' + err.message, 'error'))
-    .getVistaGeneral(obra);
+  try {
+    const res = await llamarAPI('getVistaGeneral', { obra });
+    if (res.error) { mostrarMsg('msgVG', res.error, 'error'); document.getElementById('vgContent').innerHTML=''; return; }
+    vgData = res;
+    vgNivel = 'ambientes';
+    vgAmbienteSel = null;
+    vgGrupoSel = null;
+    renderVistaGeneral();
+  } catch (err) {
+    mostrarMsg('msgVG', 'Error: ' + err.message, 'error');
+  }
 }
 
 function vgDots(pieza) {
@@ -1362,6 +1127,259 @@ function mostrarMsg(id, texto, tipo) {
 }
 function ocultarMsg(id) {
   document.getElementById(id).className = 'msg';
+}
+
+// ============================================================================
+// LOGIN
+// ============================================================================
+
+let usuarioActual = '';
+let rolActual = '';
+
+async function hacerLogin() {
+  const nombre = document.getElementById('loginNombre').value.trim();
+  if (!nombre) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = 'Ingresá tu nombre'; return; }
+  try {
+    const res = await llamarAPI('validarLogin', { nombre });
+    if (res.error) { document.getElementById('msgLogin').className = 'msg show error'; document.getElementById('msgLogin').textContent = res.error; return; }
+    usuarioActual = res.nombre;
+    rolActual = res.rol;
+    document.getElementById('loginOverlay').style.display = 'none';
+  } catch (err) {
+    document.getElementById('msgLogin').className = 'msg show error';
+    document.getElementById('msgLogin').textContent = 'Error: ' + err.message;
+  }
+}
+
+function puedeEditar() {
+  if (rolActual === 'viewer') {
+    mostrarMsg('msg', '👁 Estás en modo solo lectura — no se puede editar.', 'warn');
+    return false;
+  }
+  return true;
+}
+
+// ============================================================================
+// PUERTAS PLACA
+// ============================================================================
+
+function togglePuertasPlacaForm() {
+  const form = document.getElementById('formPuertaPlaca');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarPuertaPlaca() {
+  if (!puedeEditar()) return;
+  const obra = obraChecklistActual;
+  if (!obra) { mostrarMsg('msg', 'Primero cargá una obra arriba.', 'warn'); return; }
+  const tipo = document.getElementById('ppTipo').value;
+  const material = document.getElementById('ppMaterial').value.trim();
+  const cantidad = document.getElementById('ppCantidad').value.trim();
+  if (!material || !cantidad) { mostrarMsg('msg', 'Completá material y cantidad.', 'warn'); return; }
+  try {
+    const res = await llamarAPI('agregarPuertaPlaca', { obra, tipo, material, cantidad, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    mostrarMsg('msg', res.mensaje, 'ok');
+    document.getElementById('ppMaterial').value = '';
+    document.getElementById('ppCantidad').value = '';
+    document.getElementById('formPuertaPlaca').style.display = 'none';
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPuertasPlaca() {
+  const obra = obraChecklistActual;
+  if (!obra) { document.getElementById('puertasPlacaSeccion').style.display = 'none'; return; }
+  try {
+    const res = await llamarAPI('getPuertasPlaca', { obra });
+    if (res.error || !res.items.length) { document.getElementById('puertasPlacaSeccion').style.display = 'none'; return; }
+    const activas = res.items.filter(it => !(it.lista === 'Si' && it.estadoLogistica === 'Completado' && it.estadoInstalacion === 'Completado'));
+    if (!activas.length) { document.getElementById('puertasPlacaSeccion').style.display = 'none'; return; }
+    document.getElementById('puertasPlacaSeccion').style.display = 'block';
+    const puedeConfirmar = estacionActual === 'Logistica' || estacionActual === 'Instalacion';
+    document.getElementById('puertasPlacaLista').innerHTML = activas.map(it => {
+      const yaHecho = puedeConfirmar && (estacionActual === 'Logistica' ? it.estadoLogistica : it.estadoInstalacion) === 'Completado';
+      const botonConfirmar = puedeConfirmar
+        ? `<button class="btn-resolver" style="margin-top:6px;" onclick="togglePuertaPlacaProceso(${it.fila}, '${yaHecho}')">${yaHecho ? '✓ ' + estacionActual + ' — tocar para destildar' : 'Confirmar ' + estacionActual}</button>`
+        : '';
+      return `
+      <div class="modulo-card ${it.lista === 'Si' ? 'done' : ''}">
+        <div class="modulo-header">
+          <div class="modulo-check" onclick="togglePuertaPlacaLista(${it.fila}, '${it.lista}')">${it.lista === 'Si' ? '✓' : ''}</div>
+          <div class="modulo-info">
+            <div class="ambiente">${it.tipo}</div>
+            <div class="nombre">${it.cantidad} — ${it.material}</div>
+            <div class="modulo-id">Logística: ${it.estadoLogistica} · Instalación: ${it.estadoInstalacion}</div>
+            ${botonConfirmar}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('puertasPlacaSeccion').style.display = 'none';
+  }
+}
+
+async function togglePuertaPlacaLista(fila, listaActual) {
+  if (!puedeEditar()) return;
+  const nuevaLista = listaActual !== 'Si';
+  try {
+    await llamarAPI('marcarPuertaPlacaLista', { fila, lista: nuevaLista, usuario: usuarioActual });
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function togglePuertaPlacaProceso(fila, yaHechoStr) {
+  if (!puedeEditar()) return;
+  const yaHecho = yaHechoStr === 'true';
+  try {
+    await llamarAPI('confirmarPuertaPlacaProceso', { fila, proceso: estacionActual, estadoDestino: yaHecho ? 'Pendiente' : 'Completado', usuario: usuarioActual });
+    cargarPuertasPlaca();
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PESTAÑA COMPRAS -- vista global de solo lectura
+// ============================================================================
+
+async function cargarComprasGlobal() {
+  document.getElementById('comprasLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getFaltantesMaterialGlobal', {});
+    if (res.error) { document.getElementById('comprasResumen').textContent = res.error; document.getElementById('comprasLista').innerHTML = ''; return; }
+    if (!res.total) {
+      document.getElementById('comprasResumen').textContent = '✓ No hay faltantes de material pendientes en ninguna obra.';
+      document.getElementById('comprasLista').innerHTML = '';
+      return;
+    }
+    document.getElementById('comprasResumen').textContent = `⚠ ${res.total} faltante(s) pendiente(s), de más antiguo a más nuevo:`;
+    document.getElementById('comprasLista').innerHTML = res.items.map(it => `
+      <div class="material-pendiente">
+        <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
+        <button class="btn-resolver" onclick="resolverMaterialGlobal(${it.fila})">Ya llegó</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('comprasResumen').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function resolverMaterialGlobal(fila) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarComprasGlobal();
+  } catch (err) {
+    mostrarMsg('msgVG', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// PAÑOL -- Faltantes globales + Puertas de Vidrio/Espejo
+// ============================================================================
+
+async function cargarPanolFaltantes() {
+  document.getElementById('panolFaltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getFaltantesMaterialGlobal', {});
+    if (res.error) { document.getElementById('panolFaltantesResumen').textContent = res.error; return; }
+    if (!res.total) {
+      document.getElementById('panolFaltantesResumen').textContent = '✓ No hay faltantes de material pendientes.';
+      document.getElementById('panolFaltantesLista').innerHTML = '';
+      return;
+    }
+    document.getElementById('panolFaltantesResumen').textContent = `${res.total} faltante(s) pendiente(s) para gestionar con compras:`;
+    document.getElementById('panolFaltantesLista').innerHTML = res.items.map(it => `
+      <div class="material-pendiente">
+        <span><b>${it.obra}</b> — ${it.estacion}<br>Faltan <b>${it.cantidad}</b> de <b>${it.material}</b>${it.motivo ? ' — ' + it.motivo : ''}<br><span style="font-size:9.5px; color:var(--ink-soft);">${new Date(it.fecha).toLocaleDateString('es-AR')}</span></span>
+        <button class="btn-resolver" onclick="resolverMaterialPanol(${it.fila})">Ya llegó</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('panolFaltantesResumen').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function resolverMaterialPanol(fila) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('resolverFaltaMaterial', { fila, usuario: usuarioActual });
+    cargarPanolFaltantes();
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+function toggleFormPuertaVidrio() {
+  const form = document.getElementById('formPuertaVidrio');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function enviarPuertaVidrio() {
+  if (!puedeEditar()) return;
+  const obra = document.getElementById('panolObra').value.trim();
+  const cantidad = document.getElementById('pvCantidad').value.trim();
+  const medida = document.getElementById('pvMedida').value.trim();
+  const perfilColor = document.getElementById('pvPerfilColor').value.trim();
+  const armado = document.getElementById('pvArmado').value;
+  if (!obra) { mostrarMsg('msgPanol', 'Primero cargá una obra arriba.', 'warn'); return; }
+  if (!cantidad) { mostrarMsg('msgPanol', 'Completá la cantidad.', 'warn'); return; }
+  try {
+    const res = await llamarAPI('agregarPuertaVidrio', { obra, cantidad, medida, perfilColor, armado, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); return; }
+    mostrarMsg('msgPanol', res.mensaje, 'ok');
+    document.getElementById('pvCantidad').value = '';
+    document.getElementById('pvMedida').value = '';
+    document.getElementById('pvPerfilColor').value = '';
+    document.getElementById('formPuertaVidrio').style.display = 'none';
+    cargarPuertasVidrio();
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
+}
+
+async function cargarPuertasVidrio() {
+  const obra = document.getElementById('panolObra').value.trim();
+  if (!obra) { document.getElementById('puertasVidrioSeccion').style.display = 'none'; return; }
+  try {
+    const res = await llamarAPI('getPuertasVidrio', { obra });
+    if (res.error || !res.items.length) { document.getElementById('puertasVidrioSeccion').style.display = 'none'; return; }
+    document.getElementById('puertasVidrioSeccion').style.display = 'block';
+    document.getElementById('puertasVidrioLista').innerHTML = res.items.map(it => `
+      <div class="modulo-card">
+        <div class="modulo-header">
+          <div class="modulo-info">
+            <div class="ambiente">${it.armado === 'Jorge' ? 'TERCERIZADO (JORGE)' : 'ARMADO EN FÁBRICA'}</div>
+            <div class="nombre">${it.cantidad} puerta(s) — ${it.medida || 'sin medida cargada'}</div>
+            <div class="modulo-id">${it.perfilColor || ''}</div>
+          </div>
+          <select onchange="cambiarEstadoPuertaVidrio(${it.fila}, this.value)" style="font-size:11px; padding:4px; border-radius:6px; border:1.5px solid var(--line);">
+            <option value="Pendiente" ${it.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="Pedido" ${it.estado === 'Pedido' ? 'selected' : ''}>Pedido</option>
+            <option value="En fabrica" ${it.estado === 'En fabrica' ? 'selected' : ''}>Ya en fábrica</option>
+          </select>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('puertasVidrioLista').innerHTML = 'Error: ' + err.message;
+  }
+}
+
+async function cambiarEstadoPuertaVidrio(fila, estado) {
+  if (!puedeEditar()) return;
+  try {
+    await llamarAPI('actualizarEstadoPuertaVidrio', { fila, estado, usuario: usuarioActual });
+    mostrarMsg('msgPanol', 'Estado actualizado', 'ok');
+  } catch (err) {
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
+  }
 }
 </script>
 <datalist id="obrasDatalist"></datalist>
