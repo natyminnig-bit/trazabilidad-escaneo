@@ -200,13 +200,16 @@
           ⚡ Modo ráfaga (escanear varias seguidas, sin confirmar una por una)
         </label>
       </div>
-      <div id="rafagaResumen" style="display:none; background:var(--teal-bg); border:1.5px solid var(--teal); border-radius:8px; padding:10px; margin-bottom:8px; font-size:13px;">
-        <b><span id="rafagaContador">0</span> piezas escaneadas</b> en este lote
-        <div id="rafagaLista" style="font-size:11px; color:var(--ink-soft); margin-top:4px; max-height:100px; overflow-y:auto;"></div>
-        <button class="btn-resolver" style="margin-top:6px;" onclick="finalizarRafaga()">Finalizar lote</button>
+      <div id="rafagaContadorBox" style="display:none; background:var(--teal-bg); border:1.5px solid var(--teal); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px;">
+        <b><span id="rafagaContador">0</span> piezas escaneadas</b> en este lote —
+        <a href="#" onclick="finalizarRafaga(); return false;" style="color:var(--steel); font-weight:700;">Finalizar</a>
+        <div id="rafagaLista" style="font-size:11px; color:var(--ink-soft); margin-top:4px; max-height:70px; overflow-y:auto;"></div>
       </div>
       <button id="btnIniciarCamara" class="confirm-btn" style="display:none; background:var(--steel);" onclick="iniciarCamara()">📷 Iniciar cámara</button>
-      <video id="video" playsinline></video>
+      <div style="position:relative;">
+        <video id="video" playsinline></video>
+        <button id="btnSiguienteRafaga" style="display:none; position:absolute; top:8px; right:8px; background:var(--rust); color:#fff; border:none; border-radius:8px; padding:10px 8px; font-size:11px; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,.3);" onclick="escanearSiguienteManual()">📷<br>Siguiente</button>
+      </div>
       <canvas id="canvas"></canvas>
       <div class="cam-note" id="camNote"></div>
       <div class="manual-entry">
@@ -899,15 +902,15 @@ async function procesarClave(codigo) {
   if (modoRafaga) {
     try {
       const res = await llamarAPI('confirmarEscaneo', { clave: codigo, proceso: estacionActual, usuario: usuarioActual });
-      if (res.error) { mostrarMsg('msg', codigo + ': ' + res.error, 'error'); iniciarCamara(); return; }
+      if (res.error) { mostrarMsg('msg', codigo + ': ' + res.error, 'error'); setTimeout(iniciarCamara, 500); return; }
       rafagaCount++;
       rafagaItems.unshift(codigo + (res.duplicado ? ' (ya estaba)' : ''));
       document.getElementById('rafagaContador').textContent = rafagaCount;
       document.getElementById('rafagaLista').innerHTML = rafagaItems.slice(0, 8).map(c => `• ${c}`).join('<br>');
-      iniciarCamara();
+      setTimeout(iniciarCamara, 500); // pausa breve -- reiniciar sin delay dejaba la camara en negro
     } catch (err) {
       mostrarMsg('msg', 'Error: ' + err.message, 'error');
-      iniciarCamara();
+      setTimeout(iniciarCamara, 500);
     }
     return;
   }
@@ -928,13 +931,19 @@ let rafagaItems = [];
 
 function toggleModoRafaga() {
   modoRafaga = document.getElementById('modoRafagaCheck').checked;
-  document.getElementById('rafagaResumen').style.display = modoRafaga ? 'block' : 'none';
+  document.getElementById('rafagaContadorBox').style.display = modoRafaga ? 'block' : 'none';
+  document.getElementById('btnSiguienteRafaga').style.display = modoRafaga ? 'block' : 'none';
   if (modoRafaga) {
     rafagaCount = 0;
     rafagaItems = [];
     document.getElementById('rafagaContador').textContent = '0';
     document.getElementById('rafagaLista').innerHTML = '';
   }
+}
+
+function escanearSiguienteManual() {
+  detenerCamara();
+  setTimeout(iniciarCamara, 200);
 }
 
 function finalizarRafaga() {
