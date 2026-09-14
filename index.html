@@ -184,11 +184,12 @@
   <div class="tabpanel show" id="tabEscaneo">
     <div class="estacion-grid" id="estacionGrid"></div>
 
+    <div class="manual-entry" style="margin-bottom:10px;">
+      <input type="text" id="obraActualInput" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarObraActual()">
+      <button onclick="cargarObraActual()">Cargar</button>
+    </div>
+
     <div id="checklistBox" style="display:none;">
-      <div class="manual-entry" style="margin-bottom:10px;">
-        <input type="text" id="checklistObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarModulosChecklist()">
-        <button onclick="cargarModulosChecklist()">Cargar</button>
-      </div>
       <div id="checklistNav"></div>
     </div>
 
@@ -207,10 +208,6 @@
 
     <div id="faltantesBox" style="display:none; margin-top:16px;">
       <div class="section-divider" style="margin-top:0;">⚠ Piezas faltantes</div>
-      <div class="manual-entry" style="margin-bottom:6px;">
-        <input type="text" id="faltantesObra" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarFaltantes()">
-        <button onclick="cargarFaltantes()">Ver faltantes</button>
-      </div>
       <div id="faltantesResumen" class="scan-toggle-note"></div>
       <div id="materialPendienteLista"></div>
       <button class="btn-reportar-material" onclick="toggleFormMaterial()">⚠ Reportar falta de material</button>
@@ -228,24 +225,6 @@
     <div id="puertasPlacaSeccion" style="display:none;">
       <div class="section-divider">🚪 Puertas Placa</div>
       <div id="puertasPlacaLista" style="margin-bottom:8px;"></div>
-    </div>
-    <div id="puertasPlacaAgregarLink" style="text-align:center; margin:10px 0;">
-      <a href="#" onclick="togglePuertasPlacaForm(); return false;" style="font-size:11.5px; color:var(--steel); font-weight:700;">+ Agregar puerta placa</a>
-    </div>
-    <div id="formPuertaPlaca" style="display:none; margin-bottom:14px;">
-      <div class="field">
-        <label>Tipo</label>
-        <select id="ppTipo" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
-          <option value="Con marco a la vuelta">Con marco a la vuelta</option>
-          <option value="Con marco a la vuelta y tapajuntas">Con marco a la vuelta y tapajuntas</option>
-          <option value="Con marco vertical">Con marco vertical</option>
-        </select>
-      </div>
-      <div class="field row2">
-        <div><label>Material</label><input type="text" id="ppMaterial" placeholder="Ej: Blanco 18mm"></div>
-        <div><label>Cantidad</label><input type="number" id="ppCantidad" placeholder="Ej: 3"></div>
-      </div>
-      <button class="confirm-btn" onclick="enviarPuertaPlaca()">Cargar</button>
     </div>
   </div>
 
@@ -266,6 +245,26 @@
     </div>
     <div style="text-align:center; margin:10px 0;">
       <a href="#" onclick="toggleFormPuertaVidrio(); return false;" style="font-size:11.5px; color:var(--steel); font-weight:700;">+ Agregar puerta de vidrio/espejo</a>
+    </div>
+
+    <div class="section-divider">🚪 Puertas Placa</div>
+    <div style="text-align:center; margin:10px 0;">
+      <a href="#" onclick="togglePuertasPlacaForm(); return false;" style="font-size:11.5px; color:var(--steel); font-weight:700;">+ Agregar puerta placa</a>
+    </div>
+    <div id="formPuertaPlaca" style="display:none; margin-bottom:14px;">
+      <div class="field">
+        <label>Tipo</label>
+        <select id="ppTipo" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;">
+          <option value="Con marco a la vuelta">Con marco a la vuelta</option>
+          <option value="Con marco a la vuelta y tapajuntas">Con marco a la vuelta y tapajuntas</option>
+          <option value="Con marco vertical">Con marco vertical</option>
+        </select>
+      </div>
+      <div class="field row2">
+        <div><label>Material</label><input type="text" id="ppMaterial" placeholder="Ej: Blanco 18mm"></div>
+        <div><label>Cantidad</label><input type="number" id="ppCantidad" placeholder="Ej: 3"></div>
+      </div>
+      <button class="confirm-btn" onclick="enviarPuertaPlaca()">Cargar</button>
     </div>
     <div id="formPuertaVidrio" style="display:none;">
       <div class="field row2">
@@ -414,7 +413,7 @@ PROCESOS.forEach(p => {
   } catch (err) { /* silencioso */ }
 })();
 
-const PROCESOS_CON_CHECKLIST = ["Armado", "Logistica", "Instalacion"];
+const PROCESOS_CON_CHECKLIST = ["Corte", "Pegado", "Mecanizado", "Armado", "Logistica", "Instalacion"];
 
 function seleccionarEstacion(proceso, btnEl) {
   estacionActual = proceso;
@@ -428,21 +427,26 @@ function seleccionarEstacion(proceso, btnEl) {
   document.getElementById('faltantesBox').style.display = 'block';
   document.getElementById('faltantesLista').innerHTML = '';
   document.getElementById('faltantesResumen').textContent = '';
-  const obraFaltantesGuardada = document.getElementById('faltantesObra').value.trim();
-  if (obraFaltantesGuardada) cargarFaltantes();
 
   const esChecklist = PROCESOS_CON_CHECKLIST.indexOf(proceso) !== -1;
   document.getElementById('checklistBox').style.display = esChecklist ? 'block' : 'none';
-  if (esChecklist) {
-    const obraGuardada = document.getElementById('checklistObra').value.trim();
-    if (obraGuardada) cargarModulosChecklist();
-  }
+
+  if (obraChecklistActual) cargarObraActual();
+}
+
+function cargarObraActual() {
+  const obra = document.getElementById('obraActualInput').value.trim() || obraChecklistActual;
+  if (!obra) return;
+  document.getElementById('obraActualInput').value = obra;
+  obraChecklistActual = obra;
+  if (PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) cargarModulosChecklist();
+  cargarFaltantes();
+  cargarPuertasPlaca();
 }
 
 async function cargarFaltantes() {
-  const obra = document.getElementById('faltantesObra').value.trim();
+  const obra = obraChecklistActual;
   if (!obra) return;
-  obraChecklistActual = obra;
   document.getElementById('faltantesLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
   try {
     const res = await llamarAPI('getPiezasFaltantes', { obra, proceso: estacionActual });
@@ -547,9 +551,8 @@ let chkNivel = 'ambientes';
 let chkAmbienteSel = null;
 
 async function cargarModulosChecklist() {
-  const obra = document.getElementById('checklistObra').value.trim();
+  const obra = obraChecklistActual;
   if (!obra) return;
-  obraChecklistActual = obra;
   chkNivel = 'ambientes';
   chkAmbienteSel = null;
   document.getElementById('checklistNav').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
@@ -582,7 +585,7 @@ function chkIrAmbiente(ambiente) { chkNivel = 'detalle'; chkAmbienteSel = ambien
 function chkVolverAmbientes() { chkNivel = 'ambientes'; chkAmbienteSel = null; renderChecklistNav(); }
 
 function notaProcesoPlacar() {
-  if (estacionActual === 'Armado') return 'En Armado hay que tildar/escanear cada pieza individual del placar (control estricto).';
+  if (['Corte','Pegado','Mecanizado','Armado'].indexOf(estacionActual) !== -1) return 'En esta estación hay que tildar/escanear cada pieza individual del placar (control estricto).';
   if (estacionActual === 'Logistica') return 'Un toque confirma todo el módulo por cantidad. Si falta algo, desplegá para ver el detalle.';
   return 'Igual que un módulo de cocina — un toque confirma todo. Desplegable para ver el detalle.';
 }
@@ -742,7 +745,7 @@ async function toggleGenericaPieza(el, claveUnica) {
 function renderPlacaresLista(modulos) {
   document.getElementById('placarNote').textContent = notaProcesoPlacar();
 
-  if (estacionActual === 'Armado') {
+  if (['Corte','Pegado','Mecanizado','Armado'].indexOf(estacionActual) !== -1) {
     document.getElementById('placaresLista').innerHTML = modulos.map((m, i) => `
       <div class="modulo-card ${m.completado ? 'done' : ''}">
         <div class="modulo-header">
@@ -1170,22 +1173,21 @@ function togglePuertasPlacaForm() {
 
 async function enviarPuertaPlaca() {
   if (!puedeEditar()) return;
-  const obra = obraChecklistActual;
-  if (!obra) { mostrarMsg('msg', 'Primero cargá una obra arriba.', 'warn'); return; }
+  const obra = document.getElementById('panolObra').value.trim();
+  if (!obra) { mostrarMsg('msgPanol', 'Primero cargá una obra arriba.', 'warn'); return; }
   const tipo = document.getElementById('ppTipo').value;
   const material = document.getElementById('ppMaterial').value.trim();
   const cantidad = document.getElementById('ppCantidad').value.trim();
-  if (!material || !cantidad) { mostrarMsg('msg', 'Completá material y cantidad.', 'warn'); return; }
+  if (!material || !cantidad) { mostrarMsg('msgPanol', 'Completá material y cantidad.', 'warn'); return; }
   try {
     const res = await llamarAPI('agregarPuertaPlaca', { obra, tipo, material, cantidad, usuario: usuarioActual });
-    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
-    mostrarMsg('msg', res.mensaje, 'ok');
+    if (res.error) { mostrarMsg('msgPanol', res.error, 'error'); return; }
+    mostrarMsg('msgPanol', res.mensaje, 'ok');
     document.getElementById('ppMaterial').value = '';
     document.getElementById('ppCantidad').value = '';
     document.getElementById('formPuertaPlaca').style.display = 'none';
-    cargarPuertasPlaca();
   } catch (err) {
-    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+    mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
   }
 }
 
