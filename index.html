@@ -11,6 +11,23 @@
     --steel:#233240; --rust:#B5502E; --teal:#1B7F63; --teal-bg:#E7F4EE; --amber:#DE9A34;
     --font:'Segoe UI', system-ui, sans-serif;
   }
+  body.modo-oscuro{
+    --bg:#14181D; --panel:#1E252D; --ink:#E8E6E0; --ink-soft:#9AA0A8; --line:#333B44;
+    --teal-bg:#123A2E;
+  }
+  body.modo-oscuro input, body.modo-oscuro select, body.modo-oscuro textarea{
+    background:#1E252D; color:#E8E6E0; border-color:#333B44;
+  }
+  body.modo-oscuro .modulo-card, body.modo-oscuro .falt-pieza, body.modo-oscuro .piece-card{
+    background:#1E252D;
+  }
+  .flash-confirmacion{
+    position:fixed; inset:0; z-index:998; display:flex; align-items:center; justify-content:center;
+    font-size:120px; color:#fff; opacity:0; pointer-events:none; transition:opacity .15s;
+  }
+  .flash-confirmacion.show{opacity:1; transition:opacity 0s;}
+  .flash-confirmacion.ok{background:rgba(27,127,99,.92);}
+  .flash-confirmacion.error{background:rgba(181,80,46,.92);}
   *{box-sizing:border-box;}
   body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); padding-bottom:40px;}
   .header{background:var(--steel); color:#fff; padding:16px; text-align:center;}
@@ -151,6 +168,8 @@
 </head>
 <body>
 
+<div id="offlineBanner" style="display:none; background:#B5502E; color:#fff; text-align:center; font-size:12px; font-weight:800; padding:8px;">⚠ SIN CONEXIÓN — lo que hagas ahora no se va a guardar hasta que vuelva la señal</div>
+
 <div id="loginOverlay" style="position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; padding:20px;">
   <div style="background:#fff; border-radius:14px; padding:24px 20px; width:100%; max-width:340px; box-shadow:0 4px 20px rgba(0,0,0,.15);">
     <div style="text-align:center; margin-bottom:18px;">
@@ -166,9 +185,21 @@
   </div>
 </div>
 
-<div class="header">
+<div class="flash-confirmacion" id="flashConfirmacion"></div>
+
+<div class="header" style="position:relative;">
   <h1>Sistema de Trazabilidad</h1>
   <div class="sub">Industria Interior</div>
+  <button onclick="toggleModoOscuro()" style="position:absolute; top:12px; right:12px; background:rgba(255,255,255,.15); border:none; color:#fff; border-radius:6px; padding:6px 8px; font-size:14px; cursor:pointer;" id="btnModoOscuro">🌙</button>
+  <div id="contadorHoyBox" style="position:absolute; top:12px; left:12px; background:rgba(255,255,255,.15); color:#fff; border-radius:6px; padding:4px 8px; font-size:11px; font-weight:800;"></div>
+</div>
+
+<div style="max-width:480px; margin:10px auto 0; padding:0 16px;">
+  <div class="manual-entry" style="margin-bottom:0;">
+    <input type="text" id="buscadorGlobalInput" placeholder="🔍 Buscar obra o clave de pieza..." onkeydown="if(event.key==='Enter') buscarGlobalGo()">
+    <button onclick="buscarGlobalGo()">Buscar</button>
+  </div>
+  <div id="buscadorGlobalResultado" style="display:none; background:#fff; border:1.5px solid var(--line); border-radius:8px; padding:10px; margin-top:6px; font-size:12.5px;"></div>
 </div>
 
 <div class="tabbar">
@@ -188,6 +219,8 @@
       <input type="text" id="obraActualInput" list="obrasDatalist" placeholder="Nombre de la obra (ej: T 02549- NOBU HOUISNG 21C)" onkeydown="if(event.key==='Enter') cargarObraActual()">
       <button onclick="cargarObraActual()">Cargar</button>
     </div>
+
+    <button id="btnGenerarRemito" style="display:none; width:100%; background:var(--steel); color:#fff; border:none; border-radius:8px; padding:12px; font-size:13px; font-weight:800; cursor:pointer; margin-bottom:12px;" onclick="generarRemito()">🖨 Generar Remito de Carga (Logística)</button>
 
     <div id="checklistBox" style="display:none;">
       <div id="checklistNav"></div>
@@ -219,6 +252,7 @@
     </div>
     <div class="piece-card" id="pieceCard"></div>
     <div class="msg" id="msg"></div>
+    <div id="deshacerBox" style="display:none; background:#FDF1E0; border:1.5px solid var(--amber); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:12px; align-items:center; justify-content:space-between;"></div>
 
     <div id="faltantesBox" style="display:none; margin-top:16px;">
       <div class="section-divider" style="margin-top:0;">⚠ Piezas faltantes</div>
@@ -353,15 +387,39 @@
       <button class="confirm-btn" onclick="enviarRetrabajo()">Generar pedido</button>
     </div>
     <div class="msg" id="msgRetrabajo"></div>
+
+    <div class="section-divider">📋 Órdenes de Retrabajo ya generadas</div>
+    <div class="field">
+      <label>Obra (dejar vacío para ver todas)</label>
+      <input type="text" id="retVerObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C">
+    </div>
+    <div class="field">
+      <label>Filtrar por estado</label>
+      <select id="retFiltroEstado" style="width:100%; padding:11px; border:1.5px solid var(--line); border-radius:9px; font-size:14px;" onchange="cargarRetrabajos()">
+        <option value="">Todos</option>
+        <option value="Pendiente de aprobacion">Pendientes de aprobación</option>
+        <option value="Aprobado">Aprobados</option>
+      </select>
+    </div>
+    <button class="confirm-btn" style="margin-top:0; background:var(--steel);" onclick="cargarRetrabajos()">Ver órdenes</button>
+    <button class="confirm-btn" style="margin-top:6px; background:var(--rust);" onclick="imprimirListadoRetrabajos()">🖨 Imprimir listado completo</button>
+    <div id="retrabajosLista" style="margin-top:12px;"></div>
   </div>
 
   <div class="tabpanel" id="tabVistaGeneral">
+    <div id="estancadasBox" style="display:none; background:#FBE4E1; border:1.5px solid #D8503E; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px;"></div>
+
+    <div class="section-divider" style="margin-top:0;">📅 Hoy — quién hizo qué</div>
+    <div id="actividadHoyBox"></div>
+
+    <div class="section-divider">Vista General por obra</div>
     <div class="field">
       <label>Obra</label>
       <input type="text" id="vgObra" list="obrasDatalist" placeholder="Ej: T 02549- NOBU HOUISNG 21C" value="T 02549- NOBU HOUISNG 21C">
     </div>
     <button class="confirm-btn" style="margin-top:0;" onclick="cargarVistaGeneral()">Actualizar Vista General</button>
     <div id="vgStats" style="margin-top:12px;"></div>
+    <div id="retrabajosPorMotivoBox" style="margin-top:8px;"></div>
     <div id="vgContent" style="margin-top:16px;"></div>
     <div class="msg" id="msgVG"></div>
   </div>
@@ -405,6 +463,7 @@ function mostrarTab(nombre) {
   if (nombre !== 'Escaneo') { detenerCamara(); }
   if (nombre === 'Compras') { cargarComprasGlobal(); }
   if (nombre === 'Panol') { cargarPanolFaltantes(); }
+  if (nombre === 'VistaGeneral') { cargarEstancadas(); cargarActividadHoy(); }
 }
 
 const grid = document.getElementById('estacionGrid');
@@ -431,6 +490,7 @@ const PROCESOS_CON_CHECKLIST = ["Corte", "Pegado", "Mecanizado", "Armado", "Logi
 
 function seleccionarEstacion(proceso, btnEl) {
   estacionActual = proceso;
+  aplicarColorEstacion(proceso);
   document.querySelectorAll('.estacion-btn').forEach(b => b.classList.remove('active'));
   btnEl.classList.add('active');
   document.getElementById('scanBox').classList.add('show');
@@ -444,6 +504,7 @@ function seleccionarEstacion(proceso, btnEl) {
 
   const esChecklist = PROCESOS_CON_CHECKLIST.indexOf(proceso) !== -1;
   document.getElementById('checklistBox').style.display = esChecklist ? 'block' : 'none';
+  document.getElementById('btnGenerarRemito').style.display = proceso === 'Logistica' ? 'block' : 'none';
 
   if (obraChecklistActual) cargarObraActual();
 }
@@ -453,6 +514,7 @@ function cargarObraActual() {
   if (!obra) return;
   document.getElementById('obraActualInput').value = obra;
   obraChecklistActual = obra;
+  guardarUltimaObra(obra);
   if (PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) cargarModulosChecklist();
   cargarFaltantes();
   cargarPuertasPlaca();
@@ -884,6 +946,23 @@ function buscarManual() {
 async function procesarClave(codigo) {
   ocultarMsg('msg');
 
+  if (codigo.indexOf('ESTACION:') === 0) {
+    const nombreEstacion = codigo.split(':')[1];
+    if (nombreEstacion === 'Panol') { mostrarTab('Panol'); beep('ok'); return; }
+    if (nombreEstacion === 'Compras') { mostrarTab('Compras'); beep('ok'); return; }
+    const btn = Array.from(document.querySelectorAll('.estacion-btn')).find(b => b.textContent.trim() === nombreEstacion);
+    if (btn) {
+      seleccionarEstacion(nombreEstacion, btn);
+      mostrarMsg('msg', '📍 Estación seleccionada: ' + nombreEstacion, 'ok');
+      beep('ok');
+    } else {
+      mostrarMsg('msg', 'QR de estación no reconocido: ' + nombreEstacion, 'error');
+      beep('error');
+    }
+    setTimeout(iniciarCamara, 800);
+    return;
+  }
+
   if (codigo.indexOf('PLANO:') === 0) {
     document.getElementById('pieceCard').innerHTML = '<div class="loading">Registrando plano de corte...</div>';
     document.getElementById('pieceCard').classList.add('show');
@@ -902,11 +981,14 @@ async function procesarClave(codigo) {
   if (modoRafaga) {
     try {
       const res = await llamarAPI('confirmarEscaneo', { clave: codigo, proceso: estacionActual, usuario: usuarioActual });
-      if (res.error) { mostrarMsg('msg', codigo + ': ' + res.error, 'error'); setTimeout(iniciarCamara, 500); return; }
+      if (res.error) { mostrarMsg('msg', codigo + ': ' + res.error, 'error'); feedbackConfirmacion('error'); setTimeout(iniciarCamara, 500); return; }
+      feedbackConfirmacion('ok');
+      actualizarContadorHoy();
       rafagaCount++;
       rafagaItems.unshift(codigo + (res.duplicado ? ' (ya estaba)' : ''));
       document.getElementById('rafagaContador').textContent = rafagaCount;
       document.getElementById('rafagaLista').innerHTML = rafagaItems.slice(0, 8).map(c => `• ${c}`).join('<br>');
+      if (!res.duplicado) mostrarDeshacer(codigo, estacionActual);
       setTimeout(iniciarCamara, 500); // pausa breve -- reiniciar sin delay dejaba la camara en negro
     } catch (err) {
       mostrarMsg('msg', 'Error: ' + err.message, 'error');
@@ -938,6 +1020,9 @@ function toggleModoRafaga() {
     rafagaItems = [];
     document.getElementById('rafagaContador').textContent = '0';
     document.getElementById('rafagaLista').innerHTML = '';
+    activarWakeLock();
+  } else {
+    liberarWakeLock();
   }
 }
 
@@ -976,13 +1061,17 @@ function mostrarPieza(res) {
 async function confirmar() {
   if (!puedeEditar()) return;
   if (!piezaActual || !estacionActual) return;
+  const claveConfirmada = piezaActual.claveUnica;
+  const procesoConfirmado = estacionActual;
   try {
-    const res = await llamarAPI('confirmarEscaneo', { clave: piezaActual.claveUnica, proceso: estacionActual, usuario: usuarioActual });
-    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    const res = await llamarAPI('confirmarEscaneo', { clave: claveConfirmada, proceso: estacionActual, usuario: usuarioActual });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); feedbackConfirmacion('error'); return; }
+    feedbackConfirmacion('ok');
+    actualizarContadorHoy();
     mostrarMsg('msg', res.mensaje, res.duplicado ? 'warn' : 'ok');
-    if (res.piezasModuloConfirmadas > 0 && PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1) {
-      const obraGuardada = document.getElementById('checklistObra').value.trim();
-      if (obraGuardada) cargarModulosChecklist();
+    if (!res.duplicado) mostrarDeshacer(claveConfirmada, procesoConfirmado);
+    if (res.piezasModuloConfirmadas > 0 && PROCESOS_CON_CHECKLIST.indexOf(estacionActual) !== -1 && obraChecklistActual) {
+      cargarModulosChecklist();
     }
     setTimeout(() => {
       document.getElementById('pieceCard').classList.remove('show');
@@ -1098,6 +1187,7 @@ async function cargarVistaGeneral() {
   if (!obra) { mostrarMsg('msgVG', 'Completá la obra', 'warn'); return; }
   ocultarMsg('msgVG');
   document.getElementById('vgContent').innerHTML = '<div class="loading">Cargando...</div>';
+  cargarRetrabajosPorMotivo(obra);
   try {
     const res = await llamarAPI('getVistaGeneral', { obra });
     if (res.error) { mostrarMsg('msgVG', res.error, 'error'); document.getElementById('vgContent').innerHTML=''; return; }
@@ -1195,6 +1285,101 @@ function ocultarMsg(id) {
 // LOGIN
 // ============================================================================
 
+// ============================================================================
+// SONIDOS DE FEEDBACK, VIBRACION, FLASH DE CONFIRMACION
+// ============================================================================
+let audioCtx = null;
+function beep(tipo) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = tipo === 'error' ? 220 : 880;
+    gain.gain.value = 0.15;
+    osc.start();
+    setTimeout(() => osc.stop(), tipo === 'error' ? 250 : 120);
+  } catch (e) {}
+}
+function vibrar(tipo) {
+  if (!navigator.vibrate) return;
+  navigator.vibrate(tipo === 'error' ? [80, 60, 80, 60, 80] : [40]);
+}
+function flashConfirmacion(tipo) {
+  const el = document.getElementById('flashConfirmacion');
+  el.className = 'flash-confirmacion show ' + (tipo === 'error' ? 'error' : 'ok');
+  el.textContent = tipo === 'error' ? '✕' : '✓';
+  setTimeout(() => { el.className = 'flash-confirmacion'; }, 450);
+}
+function feedbackConfirmacion(tipo) {
+  beep(tipo);
+  vibrar(tipo);
+  flashConfirmacion(tipo);
+}
+
+// ============================================================================
+// AVISO DE CONEXION PERDIDA
+// ============================================================================
+window.addEventListener('offline', () => { document.getElementById('offlineBanner').style.display = 'block'; });
+window.addEventListener('online', () => { document.getElementById('offlineBanner').style.display = 'none'; });
+
+// ============================================================================
+// WAKE LOCK -- evita que la pantalla se apague durante el Modo Rafaga
+// ============================================================================
+let wakeLock = null;
+async function activarWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+function liberarWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// ============================================================================
+// MODO OSCURO
+// ============================================================================
+function toggleModoOscuro() {
+  const activo = document.body.classList.toggle('modo-oscuro');
+  document.getElementById('btnModoOscuro').textContent = activo ? '☀️' : '🌙';
+  try { localStorage.setItem('trazabilidad_modo_oscuro', activo ? '1' : '0'); } catch (e) {}
+}
+(function initModoOscuro() {
+  try {
+    if (localStorage.getItem('trazabilidad_modo_oscuro') === '1') {
+      document.body.classList.add('modo-oscuro');
+      document.addEventListener('DOMContentLoaded', () => { document.getElementById('btnModoOscuro').textContent = '☀️'; });
+    }
+  } catch (e) {}
+})();
+
+// ============================================================================
+// RECORDAR ULTIMA OBRA
+// ============================================================================
+function guardarUltimaObra(obra) {
+  try { localStorage.setItem('trazabilidad_ultima_obra', obra); } catch (e) {}
+}
+function cargarUltimaObraGuardada() {
+  try {
+    const guardada = localStorage.getItem('trazabilidad_ultima_obra');
+    if (guardada) {
+      document.getElementById('obraActualInput').value = guardada;
+      document.getElementById('vgObra').value = guardada;
+      document.getElementById('panolObra').value = guardada;
+    }
+  } catch (e) {}
+}
+
+// ============================================================================
+// COLOR POR ESTACION
+// ============================================================================
+const COLOR_ESTACION = {
+  Corte: '#B5502E', Pegado: '#DE9A34', Mecanizado: '#8A5A0F',
+  Armado: '#1B7F63', Logistica: '#233240', Instalacion: '#4A5FB5',
+};
+function aplicarColorEstacion(proceso) {
+  document.querySelector('.header').style.background = COLOR_ESTACION[proceso] || 'var(--steel)';
+}
+
 let usuarioActual = '';
 let rolActual = '';
 
@@ -1207,6 +1392,8 @@ async function hacerLogin() {
     usuarioActual = res.nombre;
     rolActual = res.rol;
     document.getElementById('loginOverlay').style.display = 'none';
+    cargarUltimaObraGuardada();
+    actualizarContadorHoy();
   } catch (err) {
     document.getElementById('msgLogin').className = 'msg show error';
     document.getElementById('msgLogin').textContent = 'Error: ' + err.message;
@@ -1441,6 +1628,312 @@ async function cambiarEstadoPuertaVidrio(fila, estado) {
   } catch (err) {
     mostrarMsg('msgPanol', 'Error: ' + err.message, 'error');
   }
+}
+
+// ============================================================================
+// DESHACER ULTIMO ESCANEO
+// ============================================================================
+let deshacerData = null;
+let deshacerTimeout = null;
+
+function mostrarDeshacer(clave, proceso) {
+  deshacerData = { clave: clave, proceso: proceso };
+  const box = document.getElementById('deshacerBox');
+  box.innerHTML = `<span>¿No era esta pieza?</span><button class="btn-resolver" style="background:var(--rust);" onclick="ejecutarDeshacer()">↩ Deshacer</button>`;
+  box.style.display = 'flex';
+  clearTimeout(deshacerTimeout);
+  deshacerTimeout = setTimeout(() => { box.style.display = 'none'; deshacerData = null; }, 8000);
+}
+
+async function ejecutarDeshacer() {
+  if (!deshacerData) return;
+  const d = deshacerData;
+  document.getElementById('deshacerBox').style.display = 'none';
+  deshacerData = null;
+  try {
+    await llamarAPI('desconfirmarPieza', { clave: d.clave, proceso: d.proceso, usuario: usuarioActual });
+    mostrarMsg('msg', 'Deshecho: ' + d.clave, 'ok');
+    if (modoRafaga) { rafagaCount = Math.max(0, rafagaCount - 1); document.getElementById('rafagaContador').textContent = rafagaCount; }
+    ofrecerRetrabajoPorDeshacer(d.clave);
+  } catch (err) {
+    mostrarMsg('msg', 'Error al deshacer: ' + err.message, 'error');
+  }
+}
+
+function ofrecerRetrabajoPorDeshacer(clave) {
+  const box = document.getElementById('deshacerBox');
+  box.innerHTML = `<span>¿Era un error de la pieza en sí?</span><button class="btn-resolver" style="background:var(--rust);" onclick="irARetrabajoConPieza('${clave.replace(/'/g,"\\'")}')">⚠ Generar retrabajo</button>`;
+  box.style.display = 'flex';
+  clearTimeout(deshacerTimeout);
+  deshacerTimeout = setTimeout(() => { box.style.display = 'none'; }, 8000);
+}
+
+function irARetrabajoConPieza(clave) {
+  document.getElementById('deshacerBox').style.display = 'none';
+  mostrarTab('Retrabajo');
+  document.getElementById('retrabajoInput').value = clave;
+  buscarPiezaRetrabajo();
+}
+
+// ============================================================================
+// BUSCADOR GLOBAL
+// ============================================================================
+async function buscarGlobalGo() {
+  const termino = document.getElementById('buscadorGlobalInput').value.trim();
+  if (!termino) return;
+  const box = document.getElementById('buscadorGlobalResultado');
+  box.style.display = 'block';
+  box.innerHTML = 'Buscando...';
+  try {
+    const res = await llamarAPI('buscarGlobal', { termino });
+    if (res.error) { box.innerHTML = res.error; return; }
+    if (res.tipo === 'obra') {
+      box.innerHTML = `<b>Obra encontrada:</b> ${res.obra}<br><button class="btn-resolver" style="margin-top:6px;" onclick="irAVistaGeneral('${res.obra.replace(/'/g,"\\'")}')">Ver en Vista General</button>`;
+    } else if (res.tipo === 'obras_multiples') {
+      box.innerHTML = '<b>Varias obras coinciden:</b><br>' + res.obras.map(o => `<a href="#" onclick="irAVistaGeneral('${o.replace(/'/g,"\\'")}'); return false;" style="display:block; margin-top:4px;">${o}</a>`).join('');
+    } else if (res.tipo === 'pieza') {
+      const p = res.pieza;
+      box.innerHTML = `<b>Pieza encontrada:</b><br>${p.pieza} — ${p.claveUnica}<br>Obra: ${p.obra} · Ambiente: ${p.ambiente}<br>Material: ${p.material} · Medida: ${p.medida}`;
+    }
+  } catch (err) {
+    box.innerHTML = 'Error: ' + err.message;
+  }
+}
+
+function irAVistaGeneral(obra) {
+  mostrarTab('VistaGeneral');
+  document.getElementById('vgObra').value = obra;
+  cargarVistaGeneral();
+  document.getElementById('buscadorGlobalResultado').style.display = 'none';
+}
+
+// ============================================================================
+// OBRAS ESTANCADAS + ACTIVIDAD HOY + CONTADOR PERSONAL
+// ============================================================================
+async function cargarEstancadas() {
+  try {
+    const res = await llamarAPI('getObrasEstancadas', { dias: 5 });
+    const box = document.getElementById('estancadasBox');
+    if (res.error || !res.total) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = `<b>⚠ ${res.total} obra(s) sin movimiento reciente:</b><br>` +
+      res.obras.map(o => `<a href="#" onclick="document.getElementById('vgObra').value='${o.obra.replace(/'/g,"\\'")}'; cargarVistaGeneral(); return false;" style="display:block; margin-top:4px; color:#A8331E;">${o.obra} — ${o.diasSinMovimiento} días sin actividad</a>`).join('');
+  } catch (err) {}
+}
+
+async function cargarActividadHoy() {
+  document.getElementById('actividadHoyBox').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getActividadHoy', {});
+    if (res.error || !res.porUsuario.length) { document.getElementById('actividadHoyBox').innerHTML = '<div class="scan-toggle-note">Sin actividad registrada hoy todavía.</div>'; return; }
+    document.getElementById('actividadHoyBox').innerHTML = res.porUsuario.map(u => `
+      <div class="falt-pieza">
+        <span><b>${u.usuario}</b> — ${u.resumen}</span>
+        <span class="falt-dias">${u.total}</span>
+      </div>
+    `).join('');
+  } catch (err) { document.getElementById('actividadHoyBox').innerHTML = ''; }
+}
+
+async function actualizarContadorHoy() {
+  if (!usuarioActual) return;
+  try {
+    const res = await llamarAPI('getActividadHoy', {});
+    if (res.error) return;
+    const mio = res.porUsuario.find(u => u.usuario === usuarioActual);
+    document.getElementById('contadorHoyBox').textContent = mio ? `📊 ${mio.total} hoy` : '📊 0 hoy';
+  } catch (err) {}
+}
+
+// ============================================================================
+// RETRABAJOS -- listado, filtro, impresion
+// ============================================================================
+async function cargarRetrabajos() {
+  const obra = document.getElementById('retVerObra').value.trim();
+  const filtroEstado = document.getElementById('retFiltroEstado').value;
+  document.getElementById('retrabajosLista').innerHTML = '<div class="scan-toggle-note">Cargando...</div>';
+  try {
+    const res = await llamarAPI('getRetrabajos', { obra });
+    if (res.error) { document.getElementById('retrabajosLista').innerHTML = '<div class="scan-toggle-note">No hay órdenes cargadas.</div>'; return; }
+    const items = filtroEstado ? res.items.filter(r => r.estado === filtroEstado) : res.items;
+    if (!items.length) { document.getElementById('retrabajosLista').innerHTML = '<div class="scan-toggle-note">No hay órdenes con ese filtro.</div>'; return; }
+    document.getElementById('retrabajosLista').innerHTML = items.map(r => `
+      <div class="modulo-card">
+        <div class="modulo-header">
+          <div class="modulo-info">
+            <div class="ambiente">${r.idPedido} — ${r.estado}</div>
+            <div class="nombre">${r.claveUnica} — ${r.motivo}</div>
+            <div class="modulo-id">${r.obra} · ${r.ambiente} · Pide: ${r.solicitadoPor} (${r.rol})</div>
+          </div>
+          <button class="btn-resolver" style="background:var(--steel);" onclick='imprimirRetrabajo(${JSON.stringify(r)})'>🖨 Ver</button>
+          <button class="btn-resolver" style="background:var(--rust); margin-top:4px;" onclick='imprimirEtiquetaRetrabajo(${JSON.stringify(r)})'>🏷 Etiqueta</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('retrabajosLista').innerHTML = 'Error: ' + err.message;
+  }
+}
+
+async function cargarRetrabajosPorMotivo(obra) {
+  try {
+    const res = await llamarAPI('getRetrabajosPorMotivo', { obra });
+    const box = document.getElementById('retrabajosPorMotivoBox');
+    if (res.error || !res.total) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div style="background:#FDF1E0; border:1.5px solid var(--amber); border-radius:8px; padding:8px 10px; font-size:12px;">
+      <b>⚠ ${res.total} retrabajo(s) en esta obra:</b> ${res.porMotivo.map(m => `${m.motivo} (${m.cantidad})`).join(' · ')}
+    </div>`;
+  } catch (err) {}
+}
+
+function imprimirRetrabajo(r) {
+  const fechaTxt = r.fecha ? new Date(r.fecha).toLocaleString('es-AR') : '';
+  const html = `
+    <html><head><title>Orden de Retrabajo ${r.idPedido}</title></head>
+    <body style="font-family:Arial, sans-serif; padding:24px; color:#1C2027;">
+      <h2 style="margin-bottom:0;">INDUSTRIA INTERIOR</h2>
+      <div style="color:#B5502E; font-weight:800; font-size:11px;">SISTEMA DE TRAZABILIDAD · ORDEN DE RETRABAJO</div>
+      <h1>${r.idPedido}</h1>
+      <div style="color:#75797F; font-size:12px;">Generado: ${fechaTxt}</div>
+      <hr>
+      <table style="width:100%; border-collapse:collapse; font-size:13px; margin-top:16px;">
+        <tr><td style="padding:8px; font-weight:800; width:180px;">Obra</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.obra}</td></tr>
+        <tr><td style="padding:8px; font-weight:800;">Ambiente</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.ambiente}</td></tr>
+        <tr><td style="padding:8px; font-weight:800;">Pieza</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.claveUnica}</td></tr>
+        <tr><td style="padding:8px; font-weight:800;">Motivo</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.motivo}</td></tr>
+        ${r.medidaNueva ? `<tr><td style="padding:8px; font-weight:800;">Medida nueva</td><td style="padding:8px; border-bottom:1px solid #ccc; color:#B5502E; font-weight:800;">${r.medidaNueva}</td></tr>` : ''}
+        <tr><td style="padding:8px; font-weight:800;">Solicitado por</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.solicitadoPor} (${r.rol})</td></tr>
+        <tr><td style="padding:8px; font-weight:800;">Estado</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.estado}</td></tr>
+        <tr><td style="padding:8px; font-weight:800; vertical-align:top;">Observaciones</td><td style="padding:8px; border-bottom:1px solid #ccc;">${r.observaciones || '—'}</td></tr>
+      </table>
+      <br><br>
+      <div style="border-top:1px solid #000; padding-top:6px; width:250px;">Firma — Encargado General</div>
+      <script>window.onload = () => window.print();<\/script>
+    </body></html>`;
+  const ventana = window.open('', '_blank');
+  ventana.document.write(html);
+  ventana.document.close();
+}
+
+function imprimirEtiquetaRetrabajo(r) {
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(r.claveUnica);
+  const html = `
+    <html><head><title>Etiqueta Retrabajo ${r.idPedido}</title></head>
+    <body style="font-family:Arial, sans-serif; padding:16px; color:#1C2027;">
+      <div style="border:3px solid #B5502E; border-radius:10px; padding:14px; max-width:320px;">
+        <div style="background:#B5502E; color:#fff; font-weight:800; font-size:13px; text-align:center; padding:6px; border-radius:6px; margin-bottom:10px;">⚠ RETRABAJO</div>
+        <div style="text-align:center; margin-bottom:8px;"><img src="${qrUrl}" width="130" height="130"></div>
+        <div style="font-size:11px; color:#75797F;">Pieza</div>
+        <div style="font-weight:800; font-size:14px; margin-bottom:6px;">${r.claveUnica}</div>
+        <div style="font-size:11px; color:#75797F;">Motivo</div>
+        <div style="font-weight:800; font-size:15px; color:#B5502E; margin-bottom:6px;">${r.motivo}</div>
+        ${r.medidaNueva ? `<div style="font-size:11px; color:#75797F;">Medida nueva</div><div style="font-weight:800; font-size:18px; margin-bottom:6px;">${r.medidaNueva}</div>` : ''}
+        <div style="font-size:10px; color:#75797F; margin-top:8px;">${r.idPedido} · ${r.obra}</div>
+      </div>
+      <script>window.onload = () => window.print();<\/script>
+    </body></html>`;
+  const ventana = window.open('', '_blank');
+  ventana.document.write(html);
+  ventana.document.close();
+}
+
+async function imprimirListadoRetrabajos() {
+  const obra = document.getElementById('retVerObra').value.trim();
+  try {
+    const res = await llamarAPI('getRetrabajos', { obra });
+    if (res.error || !res.items.length) { mostrarMsg('msgRetrabajo', 'No hay órdenes para imprimir.', 'warn'); return; }
+    const filas = res.items.map(r => `
+      <tr>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.idPedido}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${new Date(r.fecha).toLocaleDateString('es-AR')}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.obra}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.claveUnica}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.motivo}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.solicitadoPor}</td>
+        <td style="padding:6px 8px; border:1px solid #ccc; font-size:11px;">${r.estado}</td>
+      </tr>`).join('');
+    const html = `
+      <html><head><title>Retrabajos${obra ? ' - ' + obra : ''}</title></head>
+      <body style="font-family:Arial, sans-serif; padding:20px; color:#1C2027;">
+        <h2 style="margin-bottom:0;">INDUSTRIA INTERIOR</h2>
+        <div style="color:#B5502E; font-weight:800; font-size:11px;">REPORTE DE RETRABAJOS${obra ? ' — ' + obra : ' — TODAS LAS OBRAS'}</div>
+        <div style="color:#75797F; font-size:11px; margin-bottom:12px;">Generado: ${new Date().toLocaleString('es-AR')} · Total: ${res.items.length}</div>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr style="background:#1F2A36; color:#fff;">
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">ID</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Fecha</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Obra</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Pieza</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Motivo</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Pidió</th>
+            <th style="padding:6px 8px; text-align:left; font-size:11px;">Estado</th>
+          </tr>
+          ${filas}
+        </table>
+        <script>window.onload = () => window.print();<\/script>
+      </body></html>`;
+    const ventana = window.open('', '_blank');
+    ventana.document.write(html);
+    ventana.document.close();
+  } catch (err) {
+    mostrarMsg('msgRetrabajo', 'Error: ' + err.message, 'error');
+  }
+}
+
+// ============================================================================
+// REMITO AUTOMATICO
+// ============================================================================
+async function generarRemito() {
+  const obra = obraChecklistActual;
+  if (!obra) { mostrarMsg('msg', 'Primero cargá una obra arriba.', 'warn'); return; }
+  mostrarMsg('msg', 'Generando remito...', 'ok');
+  try {
+    const res = await llamarAPI('getDatosParaRemito', { obra });
+    if (res.error) { mostrarMsg('msg', res.error, 'error'); return; }
+    abrirVentanaRemito(res);
+  } catch (err) {
+    mostrarMsg('msg', 'Error: ' + err.message, 'error');
+  }
+}
+
+function abrirVentanaRemito(d) {
+  const fechaTxt = new Date(d.fecha).toLocaleString('es-AR');
+  const filaTabla = (cols) => `<tr>${cols.map(c => `<td style="padding:6px 8px; border:1px solid #ccc;">${c}</td>`).join('')}</tr>`;
+  const seccion = (titulo, headers, filas) => {
+    if (!filas.length) return '';
+    return `
+      <div style="background:#1F2A36; color:#fff; font-weight:800; padding:8px 10px; margin-top:16px;">${titulo}</div>
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <tr style="background:#1F2A36; color:#fff;">${headers.map(h => `<th style="padding:6px 8px; text-align:left;">${h}</th>`).join('')}</tr>
+        ${filas.join('')}
+      </table>`;
+  };
+  let html = `
+    <html><head><title>Remito - ${d.obra}</title></head>
+    <body style="font-family:Arial, sans-serif; padding:24px; color:#1C2027;">
+      <h2 style="margin-bottom:0;">INDUSTRIA INTERIOR</h2>
+      <div style="color:#B5502E; font-weight:800; font-size:11px;">SISTEMA DE TRAZABILIDAD · REMITO DE CARGA</div>
+      <h1>Remito — ${d.obra}</h1>
+      <div style="color:#75797F; font-size:12px;">Generado: ${fechaTxt}</div>
+      <hr>
+      ${seccion('MÓDULOS ARMADOS (Cocina/Vanitory)', ['Ambiente', 'Módulo', 'ID'],
+        d.modulos.map(m => filaTabla([m.ambiente, m.nombre, m.moduloId])))}
+      ${seccion('PLACARES', ['Ambiente', 'ID Módulo', 'Cantidad de piezas'],
+        d.placares.map(p => filaTabla([p.ambiente, p.moduloId, p.cantidad])))}
+      ${seccion('PIEZAS SUELTAS / AJUSTES', ['Descripción', 'Medida', 'Ambiente', 'Cantidad'],
+        d.genericas.map(g => filaTabla([g.descripcion, g.medida, g.ambiente, g.cantidad])))}
+      ${seccion('PAÑOL', ['Ítem', 'Ambiente', 'Cantidad'],
+        d.panol.map(p => filaTabla([p.descripcion, p.ambiente, p.cantidad])))}
+      <br><br>
+      <div style="display:flex; justify-content:space-between; margin-top:60px;">
+        <div style="width:45%; border-top:1px solid #000; padding-top:6px;">Firma — Encargado que despacha</div>
+        <div style="width:45%; border-top:1px solid #000; padding-top:6px;">Firma — Chofer / Transporte</div>
+      </div>
+      <script>window.onload = () => window.print();<\/script>
+    </body></html>`;
+  const ventana = window.open('', '_blank');
+  ventana.document.write(html);
+  ventana.document.close();
 }
 </script>
 <datalist id="obrasDatalist"></datalist>
